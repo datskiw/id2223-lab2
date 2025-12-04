@@ -3,7 +3,7 @@ import torch
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 
-MODEL_ID = "datskiw/llama3-finetome-lora"
+MODEL_ID = "datskiw/llama3-finetome-q8_0"
 
 # Load tokenizer and LoRA model
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
