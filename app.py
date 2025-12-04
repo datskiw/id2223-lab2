@@ -1,78 +1,77 @@
 import gradio as gr
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
+#HF will read the requirments.txt and download via pip installs so we can use these libraries.
 
-# Your model repository
 GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
 GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
 
-# Download GGUF model from Hugging Face Hub into the Space
-print(f"Downloading {GGUF_FILENAME} from {GGUF_REPO_ID}...")
+#Download GGUF model from Hugging Face Hub into the Space
 gguf_path = hf_hub_download(
     repo_id=GGUF_REPO_ID,
     filename=GGUF_FILENAME,
 )
-print(f"Model downloaded to: {gguf_path}")
 
-# Load model with llama.cpp (CPU inference)
-print("Loading model...")
+#Load model with llama.cpp (CPU inference)
 llm = Llama(
     model_path=gguf_path,
-    n_ctx=2048,      # Number of context tokens (history length)
-    n_threads=4,     # CPU threads - tweak if you hit CPU limits
-    n_batch=128,     # Batch size for processing
+    n_ctx=2048,      #number of context tokens,, context (history) length that model can see at once
+    n_threads=4,     # tweak if you hit CPU limits
+    n_batch=128,
 )
-print("Model loaded!")
 
-# Optional: Customize the system prompt to define the assistant's personality
+#global instruction. Helps align responses in a certain style.
+#its here we can define the purpose of our app and add creative ways of how ppl will use our LLM.
 SYSTEM_PROMPT = (
-    "You are a helpful assistant fine-tuned on the FineTome instruction dataset. "
-    "Answer clearly and concisely."
+    ""
 )
+
+#when building the prompt for the LLM, we include the history of prev prompts
+#this way we get context. History length is decided by n_ctx variable and if history overwrite this threshold older lines are ignored (I hope).
+
+def build_promptOG(history, message):
+    """Turn chat history + new user message into a plain-text prompt."""
+    lines = [f"System: {SYSTEM_PROMPT}"]
+    for user_msg, bot_msg in history:
+        lines.append(f"User: {user_msg}")
+        lines.append(f"Assistant: {bot_msg}")
+    lines.append(f"User: {message}")
+    lines.append("Assistant:") #empty because this will be the output for model to gen
+    return "\n".join(lines)
 
 def build_prompt(history, message):
-    """Turn chat history + new user message into a prompt using Llama 3.2 format."""
-    # Llama 3.2 uses special tokens for conversation format
-    prompt = "<|begin_of_text|>"
-    
-    # Add system message (optional, can be removed if not needed)
-    # prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{SYSTEM_PROMPT}<|eot_id|>"
-    
-    # Add conversation history (keep last few turns to stay within context)
-    recent_history = history[-3:] if history else []
-    for user_msg, bot_msg in recent_history:
-        prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_msg}<|eot_id|>"
-        prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{bot_msg}<|eot_id|>"
-    
-    # Add current user message
-    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{message}<|eot_id|>"
-    prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
-    
-    return prompt
+    """Turn chat history + new user message into a plain-text prompt."""
+    lines = [f"System: {SYSTEM_PROMPT}"]
+
+    for turn in history:
+        # turn might be (user, bot) or (user, bot, extra_stuff, ...)
+        if isinstance(turn, (list, tuple)) and len(turn) >= 2:
+            user_msg, bot_msg = turn[0], turn[1]
+            lines.append(f"User: {user_msg}")
+            lines.append(f"Assistant: {bot_msg}")
+        # if it's some other weird shape, just ignore it
+
+    lines.append(f"User: {message}")
+    lines.append("Assistant:")
+    return "\n".join(lines)
 
 def chat_fn(message, history):
-    """Handle chat messages - Gradio ChatInterface compatible."""
-    if history is None:
-        history = []
-    
-    # Build prompt with conversation history
     prompt = build_prompt(history, message)
-    
-    # Generate response
-    output = llm(
+
+    output = llm( 
         prompt,
-        max_tokens=256,        # Maximum tokens to generate
-        temperature=0.7,       # Sampling temperature (0.0 = deterministic, higher = more creative)
-        top_p=0.9,            # Nucleus sampling
-        repeat_penalty=1.1,    # Reduce repetition
-        stop=["<|eot_id|>", "<|end_of_text|>", "User:", "Assistant:"],  # Stop tokens
+        max_tokens=256,
+        temperature=0.7,
+        top_p=0.9,
+        stop=["User:", "Assistant:", "System:"], #stop when any of these substrings are generated (so we dont re-loop)
+        #n=1, #num of possible ouptut entries to choose from. ! bcus CPU load and netw latence already gives long answ time.
+        #^^Aparently this llama-cpp ver is a HIGH LEVEL wrapper not handling more than 1 possible outputs compared to OpenAI-style completion APIs. More low level APIS do exists though.
     )
     
-    # Extract the reply
-    reply = output["choices"][0]["text"].strip()
+    reply = output["choices"][0]["text"].strip() #out of a list of possible completions we take the first and best completion
     return reply
 
-demo = gr.ChatInterface(
+demo = gr.ChatInterface( #a gradio class which shows a chat bubble UIwhich passes message and history into fn and display returned string from fn
     fn=chat_fn,
     title="FineTuned Llama-3 on FineTome",
     description=(
@@ -83,3 +82,9 @@ demo = gr.ChatInterface(
 
 if __name__ == "__main__":
     demo.launch()
+
+#def greet(name):
+#   return "Hello " + name + "!!"
+
+#demo = gr.Interface(fn=greet, inputs="text", outputs="text")
+#demo.launch()
