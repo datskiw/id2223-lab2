@@ -23,7 +23,7 @@ llm = Llama(
 #global instruction. Helps align responses in a certain style.
 #its here we can define the purpose of our app and add creative ways of how ppl will use our LLM.
 SYSTEM_PROMPT = (
-    ""
+    "Always answer in Swedish."
 )
 
 #when building the prompt for the LLM, we include the history of prev prompts
