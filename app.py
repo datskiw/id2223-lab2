@@ -21,6 +21,7 @@ llm = Llama(
 )
 
 import requests
+import time
 from datetime import datetime
 
 # Mood map by weekday (0=Mon, 6=Sun)
@@ -73,26 +74,33 @@ def get_weather(lat=59.33, lon=18.07):
         f"?latitude={lat}&longitude={lon}&current=temperature_2m,weathercode,wind_speed_10m"
     )
     headers = {"User-Agent": "gradio-llama-weather/1.0"}
-    try:
-        r = requests.get(url, timeout=8, headers=headers)
-        r.raise_for_status()
-        data = r.json()
-        cur = data.get("current", {})
-        temp = cur.get("temperature_2m")
-        # API returns km/h; convert to m/s for clarity
-        wind_kmh = cur.get("wind_speed_10m")
-        wind_ms = None
-        if wind_kmh is not None:
-            try:
-                wind_ms = round(float(wind_kmh) / 3.6, 1)
-            except Exception:
-                wind_ms = wind_kmh
-        code = cur.get("weathercode")
-        code_desc = WEATHER_CODES.get(code, "unknown")
-        return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc} (code {code})"
-    except Exception as e:
-        print(f"[weather] request failed: {e}")
-        return f"Could not fetch weather data ({e})"
+    for attempt in range(3):
+        try:
+            r = requests.get(url, timeout=8, headers=headers)
+            if r.status_code == 429:
+                # backoff and retry on rate limit
+                time.sleep(1 + attempt)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            cur = data.get("current", {})
+            temp = cur.get("temperature_2m")
+            # API returns km/h; convert to m/s for clarity
+            wind_kmh = cur.get("wind_speed_10m")
+            wind_ms = None
+            if wind_kmh is not None:
+                try:
+                    wind_ms = round(float(wind_kmh) / 3.6, 1)
+                except Exception:
+                    wind_ms = wind_kmh
+            code = cur.get("weathercode")
+            code_desc = WEATHER_CODES.get(code, "unknown")
+            return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc} (code {code})"
+        except Exception as e:
+            last_err = e
+            print(f"[weather] attempt {attempt+1} failed: {e}")
+            time.sleep(0.5 * (attempt + 1))
+    return f"Could not fetch weather data ({last_err})"
 
 def build_prompt(history, message, weather):
     """Turn chat history + new user message into a Llama 3.2 style prompt."""
