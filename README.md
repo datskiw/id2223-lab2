@@ -27,8 +27,6 @@ Due to RAM limitations, the standard `push_to_hub_gguf()` method crashed. We imp
 
 This produced a ~1.3GB GGUF file (q8_0 quantization) for CPU inference.
 
-**Model:** `datskiw/llama3-finetome-q8_0`
-
 ### Creative Application
 
 The weather assistant combines:
@@ -71,15 +69,6 @@ The weather assistant combines:
 - Rate limiting from Open-Meteo API (handled with retries)
 - Limited to 7-day forecasts
 
-## Repository Structure
-
-```
-id2223atw/
-├── app.py                    # Gradio UI application
-├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-└── atw_Llama_3_2_1B+3B_Conversational_+_2x_faster_finetuning.ipynb  # Fine-tuning notebook
-```
 
 ## Usage
 
