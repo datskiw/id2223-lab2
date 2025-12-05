@@ -156,6 +156,22 @@ def chat_fn(message, history, location):
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
     reply = output["choices"][0]["text"].strip()
     
+    # Fix incorrect "will it rain?" answers based on precipitation probability
+    msg_lower = message.lower()
+    if any(word in msg_lower for word in ["will it rain", "rain", "rainy", "precipitation"]):
+        precip_prob = weather_data.get("precip_prob", 0)
+        reply_lower = reply.lower()
+        
+        # If model says NO but precip_prob is high, correct it
+        if precip_prob >= 50 and any(word in reply_lower for word in ["no", "not", "won't", "will not", "unlikely"]):
+            if precip_prob >= 80:
+                reply = f"Yes, there's a {precip_prob}% chance of rain with {weather_data.get('precip', 0)} mm expected ({weather_data.get('description', 'precipitation')})."
+            elif precip_prob >= 50:
+                reply = f"Yes, there's a {precip_prob}% chance of rain ({weather_data.get('precip', 0)} mm expected)."
+        # If model says YES but precip_prob is low, correct it
+        elif precip_prob < 20 and any(word in reply_lower for word in ["yes", "will", "likely"]):
+            reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
+    
     # Append raw data for verification (from Open-Meteo API)
     if "temp_max" in weather_data:
         raw_data = f"\n\n[Raw data from Open-Meteo (day {day}): High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
