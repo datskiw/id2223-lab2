@@ -60,6 +60,18 @@ def geocode_location(location: str):
     return 59.33, 18.07, "Stockholm"
 
 
+def extract_location_from_message(message: str) -> str:
+    """Try to pull a location from the user message, e.g., 'weather in Barcelona'."""
+    if not message:
+        return ""
+    match = re.search(r"\bweather\s+(?:in|at|for)\s+([A-Za-z\s,'-]{2,60})", message, re.IGNORECASE)
+    if match:
+        loc = match.group(1).strip(" ,")
+        if len(loc) >= 2:
+            return loc
+    return ""
+
+
 def get_weather(lat, lon, day=0):
     """Get weather for today (day=0) or forecast (day=1-7)."""
     if day == 0:
@@ -244,7 +256,11 @@ def build_prompt(history, message, weather_data, location):
     return prompt
 
 def chat_fn(message, history, location, show_raw_data):
+    # Prefer explicit input; if not provided or is default Stockholm, try to parse from message
     lat, lon, loc_name = geocode_location(location)
+    extracted_loc = extract_location_from_message(message)
+    if extracted_loc and (not location or location.strip().lower() == "stockholm"):
+        lat, lon, loc_name = geocode_location(extracted_loc)
     day = parse_day(message)
     weather_data = get_weather(lat, lon, day)
     
