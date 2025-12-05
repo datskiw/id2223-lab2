@@ -67,8 +67,32 @@ WEATHER_CODES = {
     99: "thunderstorm with heavy hail",
 }
 
+def geocode_location(location: str, fallback_lat=59.33, fallback_lon=18.07):
+    """Geocode a city name to lat/lon using Open-Meteo. Fallback to Stockholm on failure."""
+    if not location:
+        return fallback_lat, fallback_lon, "Stockholm"
+    url = f"https://geocoding-api.open-meteo.com/v1/search?name={requests.utils.quote(location)}&count=1&language=en&format=json"
+    try:
+        r = requests.get(url, timeout=8, headers={"User-Agent": "gradio-llama-weather/1.0"})
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results") or []
+        if not results:
+            return fallback_lat, fallback_lon, "Stockholm"
+        hit = results[0]
+        lat = hit.get("latitude", fallback_lat)
+        lon = hit.get("longitude", fallback_lon)
+        name = hit.get("name") or location
+        country = hit.get("country") or ""
+        display = f"{name}, {country}".strip().strip(",")
+        return lat, lon, display
+    except Exception as e:
+        print(f"[geocode] failed for '{location}': {e}")
+        return fallback_lat, fallback_lon, "Stockholm"
+
+
 def get_weather(lat=59.33, lon=18.07):
-    """Fetch current weather from Open-Meteo. Defaults to Stockholm coords."""
+    """Fetch current weather from Open-Meteo for given coordinates."""
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
@@ -113,7 +137,7 @@ def get_weather(lat=59.33, lon=18.07):
             time.sleep(0.5 * (attempt + 1))
     return f"Could not fetch weather data ({last_err})"
 
-def build_prompt(history, message, weather):
+def build_prompt(history, message, weather, location_name):
     """Turn chat history + new user message into a Llama 3.2 style prompt."""
     weekday = datetime.utcnow().weekday()  # 0=Mon
     mood = WEEKDAY_MOOD.get(weekday, "neutral")
@@ -122,8 +146,9 @@ def build_prompt(history, message, weather):
         "You are a moody weather presenter. "
         f"Today's mood: {mood}. Be concise, factual, and avoid making up forecasts or highs/lows.\n"
         "Always include a single line starting with 'Weather:' that echoes the provided data "
-        "with temperature, wind (m/s), and description. Do not invent values.\n"
+        "with temperature, wind (m/s), and description for the location. Do not invent values.\n"
         "If weather data is unavailable, say 'Weather: unavailable <error>'.\n"
+        f"Location: {location_name}\n"
         f"Current weather data (must reuse, no changes): {weather}"
     )
 
@@ -145,9 +170,10 @@ def build_prompt(history, message, weather):
     prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
     return prompt
 
-def chat_fn(message, history):
-    weather = get_weather()
-    prompt = build_prompt(history, message, weather)
+def chat_fn(message, history, location):
+    lat, lon, loc_name = geocode_location(location)
+    weather = get_weather(lat=lat, lon=lon)
+    prompt = build_prompt(history, message, weather, loc_name)
 
     output = llm(
         prompt,
@@ -166,14 +192,17 @@ def chat_fn(message, history):
             continue
         filtered.append(line)
     reply = "\n".join(filtered).strip()
-    return f"Weather: {weather}\n{reply}" if reply else f"Weather: {weather}"
+    return f"Weather ({loc_name}): {weather}\n{reply}" if reply else f"Weather ({loc_name}): {weather}"
 
-demo = gr.ChatInterface( #a gradio class which shows a chat bubble UIwhich passes message and history into fn and display returned string from fn
+location_box = gr.Textbox(label="Location (city)", value="Stockholm")
+
+demo = gr.ChatInterface(
     fn=chat_fn,
-    title="FineTuned Llama-3 on FineTome",
+    additional_inputs=[location_box],
+    title="Moody Weather Bot (Llama 3)",
     description=(
-        "Chat with my Llama-3 model fine-tuned on the FineTome instruction dataset. "
-        "Runs on CPU via GGUF / llama.cpp."
+        "Get real weather by location with a mood that changes by weekday. "
+        "Enter a city, then ask your question."
     ),
 )
 
