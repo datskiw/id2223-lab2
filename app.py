@@ -75,6 +75,7 @@ def get_weather(lat=59.33, lon=18.07):
         "&current=temperature_2m,weathercode,wind_speed_10m,precipitation,precipitation_probability"
     )
     headers = {"User-Agent": "gradio-llama-weather/1.0"}
+    last_err = "unknown"
     for attempt in range(3):
         try:
             r = requests.get(url, timeout=8, headers=headers)
