@@ -20,55 +20,74 @@ llm = Llama(
     n_batch=128,
 )
 
-#global instruction. Helps align responses in a certain style.
-#its here we can define the purpose of our app and add creative ways of how ppl will use our LLM.
-SYSTEM_PROMPT = (
-    "Always answer in Swedish."
-)
+import requests
+from datetime import datetime
 
-#when building the prompt for the LLM, we include the history of prev prompts
-#this way we get context. History length is decided by n_ctx variable and if history overwrite this threshold older lines are ignored (I hope).
+# Mood map by weekday (0=Mon, 6=Sun)
+WEEKDAY_MOOD = {
+    0: "grumpy",
+    1: "meh",
+    2: "neutral",
+    3: "cautiously optimistic",
+    4: "hyped",
+    5: "chill",
+    6: "sleepy",
+}
 
-def build_promptOG(history, message):
-    """Turn chat history + new user message into a plain-text prompt."""
-    lines = [f"System: {SYSTEM_PROMPT}"]
-    for user_msg, bot_msg in history:
-        lines.append(f"User: {user_msg}")
-        lines.append(f"Assistant: {bot_msg}")
-    lines.append(f"User: {message}")
-    lines.append("Assistant:") #empty because this will be the output for model to gen
-    return "\n".join(lines)
+def get_weather(lat=59.33, lon=18.07):
+    """Fetch current weather from Open-Meteo. Defaults to Stockholm coords."""
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}&current=temperature_2m,weathercode,wind_speed_10m"
+    )
+    try:
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        cur = data.get("current", {})
+        temp = cur.get("temperature_2m")
+        wind = cur.get("wind_speed_10m")
+        code = cur.get("weathercode")
+        return f"Temp {temp}°C, wind {wind} m/s, weather code {code}"
+    except Exception as e:
+        return f"Could not fetch weather data ({e})"
 
 def build_prompt(history, message):
-    """Turn chat history + new user message into a plain-text prompt."""
-    lines = [f"System: {SYSTEM_PROMPT}"]
+    """Turn chat history + new user message into a Llama 3.2 style prompt."""
+    weekday = datetime.utcnow().weekday()  # 0=Mon
+    mood = WEEKDAY_MOOD.get(weekday, "neutral")
+    weather = get_weather()
 
-    for turn in history:
-        # turn might be (user, bot) or (user, bot, extra_stuff, ...)
-        if isinstance(turn, (list, tuple)) and len(turn) >= 2:
-            user_msg, bot_msg = turn[0], turn[1]
-            lines.append(f"User: {user_msg}")
-            lines.append(f"Assistant: {bot_msg}")
-        # if it's some other weird shape, just ignore it
+    system_prompt = (
+        "You are a moody weather presenter. "
+        f"Today's mood: {mood}. Keep it concise. Current weather: {weather}"
+    )
 
-    lines.append(f"User: {message}")
-    lines.append("Assistant:")
-    return "\n".join(lines)
+    prompt = "<|begin_of_text|>"
+    prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+
+    recent_history = history[-3:] if history else []
+    for user_msg, bot_msg in recent_history:
+        prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_msg}<|eot_id|>"
+        prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{bot_msg}<|eot_id|>"
+
+    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{message}<|eot_id|>"
+    prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    return prompt
 
 def chat_fn(message, history):
     prompt = build_prompt(history, message)
 
-    output = llm( 
+    output = llm(
         prompt,
-        max_tokens=256,
+        max_tokens=200,
         temperature=0.7,
         top_p=0.9,
-        stop=["User:", "Assistant:", "System:"], #stop when any of these substrings are generated (so we dont re-loop)
-        #n=1, #num of possible ouptut entries to choose from. ! bcus CPU load and netw latence already gives long answ time.
-        #^^Aparently this llama-cpp ver is a HIGH LEVEL wrapper not handling more than 1 possible outputs compared to OpenAI-style completion APIs. More low level APIS do exists though.
+        repeat_penalty=1.1,
+        stop=["<|eot_id|>", "<|end_of_text|>"],
     )
-    
-    reply = output["choices"][0]["text"].strip() #out of a list of possible completions we take the first and best completion
+
+    reply = output["choices"][0]["text"].strip()
     return reply
 
 demo = gr.ChatInterface( #a gradio class which shows a chat bubble UIwhich passes message and history into fn and display returned string from fn
