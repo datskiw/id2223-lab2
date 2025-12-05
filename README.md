@@ -1,8 +1,21 @@
+---
+title: Id2223atw
+emoji: 🌤️
+colorFrom: purple
+colorTo: blue
+sdk: gradio
+sdk_version: 6.0.1
+app_file: app.py
+pinned: false
+license: apache-2.0
+short_description: Fine-tuned Llama 3.2 Weather Assistant
+---
+
 # Lab 2: Fine-Tuned Llama 3.2 Weather Assistant
 
 A weather assistant built with a fine-tuned Llama 3.2 1B model that answers questions about current weather and forecasts using real-time data from Open-Meteo API.
 
-**Live Demo:** [Hugging Face Space](https://huggingface.co/spaces/datskiw/id2223atw)
+**Live Demo:** https://huggingface.co/spaces/datskiw/id2223atw
 
 ## Task 1: Fine-Tuning and UI
 
