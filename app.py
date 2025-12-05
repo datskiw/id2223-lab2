@@ -143,7 +143,15 @@ def chat_fn(message, history, location):
     
     prompt = build_prompt(history, message, weather_data, loc_name)
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
-    return output["choices"][0]["text"].strip()
+    reply = output["choices"][0]["text"].strip()
+    
+    # Append raw data for verification
+    if "temp_max" in weather_data:
+        raw_data = f"\n\n[Raw data: High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+    else:
+        raw_data = f"\n\n[Raw data: Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+    
+    return reply + raw_data
 
 demo = gr.ChatInterface(
     fn=chat_fn,
