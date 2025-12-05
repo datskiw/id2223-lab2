@@ -67,7 +67,13 @@ def build_prompt(history, message):
     prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
 
     recent_history = history[-3:] if history else []
-    for user_msg, bot_msg in recent_history:
+    for turn in recent_history:
+        if isinstance(turn, (list, tuple)) and len(turn) >= 2:
+            user_msg, bot_msg = turn[0], turn[1]
+        elif isinstance(turn, dict):
+            user_msg, bot_msg = turn.get("user", ""), turn.get("assistant", "")
+        else:
+            continue
         prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_msg}<|eot_id|>"
         prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{bot_msg}<|eot_id|>"
 
