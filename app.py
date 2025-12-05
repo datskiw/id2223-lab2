@@ -153,6 +153,23 @@ def parse_day(message):
             return i
     return 0  # default to today
 
+def is_general_weather_question(message):
+    """Detect if this is a general weather question (not specific like 'will it rain?')."""
+    msg_lower = message.lower()
+    general_keywords = ["what is the weather", "what's the weather", "how's the weather", 
+                       "how is the weather", "weather today", "weather tomorrow",
+                       "tell me about the weather", "describe the weather"]
+    specific_keywords = ["will it rain", "rain", "sunny", "cloudy", "wind", "temperature", "temp"]
+    
+    # Check if it's a general question
+    is_general = any(keyword in msg_lower for keyword in general_keywords)
+    
+    # But not if it's asking something specific
+    is_specific = any(keyword in msg_lower for keyword in specific_keywords)
+    
+    # If it's general and not asking something specific, it's a general weather question
+    return is_general and not is_specific
+
 def build_prompt(history, message, weather_data, location):
     """Build prompt with weather data."""
     if "temp_max" in weather_data:
@@ -162,17 +179,29 @@ def build_prompt(history, message, weather_data, location):
         w = weather_data
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
-    system_prompt = (
-        f"You are a helpful weather assistant for {location}. "
-        f"You have weather data available. You MUST answer using this data - never say 'I'm not sure' or 'I don't know'.\n\n"
-        f"Weather data available: {weather_info}\n\n"
-        "You MUST use these exact numbers in your answer. Answer naturally but include the actual data:\n"
-        "- Mention the temperature (high/low if forecast, single temp if current)\n"
-        "- Mention the weather condition (sunny, cloudy, rainy, etc.) from the description\n"
-        "- Mention wind speed if relevant\n"
-        "- If asked about rain, use the precipitation chance percentage\n"
-        "DO NOT say 'I'm not sure' - you have the data, use it!"
-    )
+    # Check if it's a general weather question
+    is_general = is_general_weather_question(message)
+    
+    if is_general:
+        # For general questions, provide comprehensive instructions
+        system_prompt = (
+            f"You are a helpful weather assistant for {location}. "
+            f"You have weather data available. You MUST answer using this data.\n\n"
+            f"Weather data available: {weather_info}\n\n"
+            "For general weather questions, ALWAYS include:\n"
+            "- The temperature (use exact number from data)\n"
+            "- The weather condition (overcast, sunny, cloudy, etc. - use exact description from data)\n"
+            "- Precipitation/rain information ONLY if precipitation chance > 0% or precipitation > 0 mm\n"
+            "Answer naturally and concisely. Use the exact data provided."
+        )
+    else:
+        # For specific questions, answer normally
+        system_prompt = (
+            f"You are a helpful weather assistant for {location}. "
+            f"You have weather data available. You MUST answer using this data - never say 'I'm not sure' or 'I don't know'.\n\n"
+            f"Weather data available: {weather_info}\n\n"
+            "Answer the specific question asked. Use the exact numbers from the data provided."
+        )
     
     prompt = "<|begin_of_text|>"
     prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
@@ -188,9 +217,6 @@ def build_prompt(history, message, weather_data, location):
     return prompt
 
 def chat_fn(message, history, location, show_raw_data):
-    # Debug: check the value being passed
-    print(f"DEBUG: show_raw_data = {show_raw_data} (type: {type(show_raw_data)})")
-    
     lat, lon, loc_name = geocode_location(location)
     day = parse_day(message)
     weather_data = get_weather(lat, lon, day)
@@ -202,23 +228,62 @@ def chat_fn(message, history, location, show_raw_data):
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
     reply = output["choices"][0]["text"].strip()
     
+    # Check if it's a general weather question
+    is_general = is_general_weather_question(message)
+    
+    # For general weather questions, ensure comprehensive response
+    if is_general:
+        reply_lower = reply.lower()
+        w = weather_data
+        
+        # Check if reply includes temperature
+        has_temp = any(word in reply_lower for word in ["°c", "celsius", "temperature", "temp", str(w.get('temp', w.get('temp_max', '')))])
+        # Check if reply includes condition
+        has_condition = w['description'].lower() in reply_lower or any(word in reply_lower for word in ["sunny", "cloudy", "overcast", "rain", "drizzle"])
+        # Check if reply includes rain info (only needed if there's precipitation)
+        precip_prob = w.get('precip_prob', 0)
+        precip = w.get('precip', 0)
+        needs_rain_info = (precip_prob > 0 or precip > 0)
+        has_rain = needs_rain_info and any(word in reply_lower for word in ["rain", "precipitation", "precip", str(precip_prob)])
+        
+        # If missing required info, generate comprehensive response
+        if not has_temp or not has_condition or (needs_rain_info and not has_rain):
+            if "temp_max" in weather_data:
+                # Forecast
+                rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if needs_rain_info else ""
+                reply = (
+                    f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
+                    f"{rain_part}"
+                )
+            else:
+                # Current
+                rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if needs_rain_info else ""
+                reply = (
+                    f"The weather is {w['description']} with a temperature of {w['temp']}°C."
+                    f"{rain_part}"
+                )
+    
     # If model gives vague answer, replace with actual data
     vague_phrases = ["i'm not sure", "i don't know", "i'm uncertain", "unable to", "cannot determine"]
     if any(phrase in reply.lower() for phrase in vague_phrases):
         # Generate answer directly from data
         if "temp_max" in weather_data:
             w = weather_data
+            precip_prob = w.get('precip_prob', 0)
+            precip = w.get('precip', 0)
+            rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm expected)." if (precip_prob > 0 or precip > 0) else ""
             reply = (
-                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
-                f"Wind speed will be around {w['wind']} m/s. "
-                f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm expected)."
+                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
+                f"{rain_part}"
             )
         else:
             w = weather_data
+            precip_prob = w.get('precip_prob', 0)
+            precip = w.get('precip', 0)
+            rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm)." if (precip_prob > 0 or precip > 0) else ""
             reply = (
-                f"The weather is {w['description']} with a temperature of {w['temp']}°C. "
-                f"Wind speed is {w['wind']} m/s. "
-                f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
+                f"The weather is {w['description']} with a temperature of {w['temp']}°C."
+                f"{rain_part}"
             )
     
     # Fix incorrect weather descriptions - check if model contradicts the actual description
