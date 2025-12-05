@@ -3,6 +3,7 @@ from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 import requests
 import time
+import re
 
 GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
 GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
@@ -285,6 +286,23 @@ def chat_fn(message, history, location, show_raw_data):
                 f"The weather is {w['description']} with a temperature of {w['temp']}°C."
                 f"{rain_part}"
             )
+    
+    # Remove redundant mentions of 0% precipitation or "no precipitation" 
+    # (only mention precipitation when there's actually a chance)
+    precip_prob = weather_data.get('precip_prob', 0)
+    precip = weather_data.get('precip', 0)
+    if precip_prob == 0 and precip == 0:
+        # Remove phrases about no precipitation or 0% chance
+        reply = re.sub(r'\s*[Tt]he precipitation chance is 0%[^.]*\.', '', reply)
+        reply = re.sub(r'\s*[Tt]here is no precipitation expected[^.]*\.', '', reply)
+        reply = re.sub(r'\s*[Aa]nd there is no precipitation expected[^.]*\.', '', reply)
+        reply = re.sub(r'\s*[Nn]o precipitation expected[^.]*\.', '', reply)
+        reply = re.sub(r'\s*[Pp]recipitation chance is 0%[^.]*\.', '', reply)
+        reply = re.sub(r'\s*[Ww]ith 0% chance of precipitation[^.]*\.', '', reply)
+        # Clean up any double spaces or trailing commas
+        reply = re.sub(r'\s+', ' ', reply).strip()
+        reply = re.sub(r',\s*\.', '.', reply)
+        reply = re.sub(r'\s*,\s*$', '', reply)
     
     # Fix incorrect weather descriptions - check if model contradicts the actual description
     actual_description = weather_data.get("description", "").lower()
