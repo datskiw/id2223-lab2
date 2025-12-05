@@ -2,6 +2,7 @@ import gradio as gr
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 import requests
+import time
 
 GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
 GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
@@ -65,53 +66,78 @@ def get_weather(lat, lon, day=0):
     else:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&forecast_days=7&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,precipitation_probability_max,wind_speed_10m_max"
     
-    try:
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()  # Check for HTTP errors
-        data = r.json()
-        
-        # Check if API returned an error
-        if "error" in data:
-            return {"error": f"API error: {data['error']}"}
-        
-        if day == 0:
-            if "current" not in data:
-                return {"error": f"API response missing 'current' key. Available keys: {list(data.keys())}"}
-            cur = data["current"]
-            return {
-                "temp": cur["temperature_2m"],
-                "wind": round(cur["wind_speed_10m"] / 3.6, 1),
-                "description": WEATHER_CODES.get(cur["weathercode"], "unknown"),
-                "precip": cur["precipitation"],
-                "precip_prob": cur["precipitation_probability"],
-                "api_url": url,
-                "time": cur.get("time", "N/A"),
-            }
-        else:
-            if "daily" not in data:
-                return {"error": f"API response missing 'daily' key. Available keys: {list(data.keys())}"}
-            daily = data["daily"]
-            idx = min(day - 1, 6)
-            # Get the date for this forecast day
-            dates = daily.get("time", [])
-            forecast_date = dates[idx] if dates and idx < len(dates) else "N/A"
-            return {
-                "temp_max": daily["temperature_2m_max"][idx],
-                "temp_min": daily["temperature_2m_min"][idx],
-                "wind": round(daily["wind_speed_10m_max"][idx] / 3.6, 1),
-                "description": WEATHER_CODES.get(daily["weathercode"][idx], "unknown"),
-                "precip": daily["precipitation_sum"][idx],
-                "precip_prob": daily["precipitation_probability_max"][idx],
-                "api_url": url,
-                "date": forecast_date,
-                "day_index": idx,
-            }
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except KeyError as e:
-        return {"error": f"Missing key in API response: {e}"}
-    except Exception as e:
-        return {"error": f"Unexpected error: {str(e)}"}
+    # Retry logic for rate limits
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(url, timeout=5)
+            
+            # Handle rate limiting with exponential backoff
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + 1  # 2s, 3s, 5s
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return {"error": "Rate limit exceeded. Please try again in a moment."}
+            
+            r.raise_for_status()  # Check for other HTTP errors
+            data = r.json()
+            
+            # Check if API returned an error
+            if "error" in data:
+                return {"error": f"API error: {data['error']}"}
+            
+            if day == 0:
+                if "current" not in data:
+                    return {"error": f"API response missing 'current' key. Available keys: {list(data.keys())}"}
+                cur = data["current"]
+                return {
+                    "temp": cur["temperature_2m"],
+                    "wind": round(cur["wind_speed_10m"] / 3.6, 1),
+                    "description": WEATHER_CODES.get(cur["weathercode"], "unknown"),
+                    "precip": cur["precipitation"],
+                    "precip_prob": cur["precipitation_probability"],
+                    "api_url": url,
+                    "time": cur.get("time", "N/A"),
+                }
+            else:
+                if "daily" not in data:
+                    return {"error": f"API response missing 'daily' key. Available keys: {list(data.keys())}"}
+                daily = data["daily"]
+                idx = min(day - 1, 6)
+                # Get the date for this forecast day
+                dates = daily.get("time", [])
+                forecast_date = dates[idx] if dates and idx < len(dates) else "N/A"
+                return {
+                    "temp_max": daily["temperature_2m_max"][idx],
+                    "temp_min": daily["temperature_2m_min"][idx],
+                    "wind": round(daily["wind_speed_10m_max"][idx] / 3.6, 1),
+                    "description": WEATHER_CODES.get(daily["weathercode"][idx], "unknown"),
+                    "precip": daily["precipitation_sum"][idx],
+                    "precip_prob": daily["precipitation_probability_max"][idx],
+                    "api_url": url,
+                    "date": forecast_date,
+                    "day_index": idx,
+                }
+            # Success - break out of retry loop
+            break
+            
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                return {"error": f"Request failed after {max_retries} attempts: {str(e)}"}
+            time.sleep(1 * (attempt + 1))  # Wait before retry
+            continue
+        except KeyError as e:
+            return {"error": f"Missing key in API response: {e}"}
+        except Exception as e:
+            if attempt == max_retries - 1:
+                return {"error": f"Unexpected error after {max_retries} attempts: {str(e)}"}
+            time.sleep(1 * (attempt + 1))
+            continue
+    
+    # This shouldn't be reached, but just in case
+    return {"error": "Failed to fetch weather data after retries"}
 
 def parse_day(message):
     """Determine which day: 0=today, 1=tomorrow, 2=day after, etc."""
