@@ -175,12 +175,14 @@ def chat_fn(message, history, location):
     lat, lon, loc_name = geocode_location(location)
     weather = get_weather(lat=lat, lon=lon)
     prompt = build_prompt(history, message, weather, loc_name)
+    weekday = datetime.utcnow().weekday()
+    mood = WEEKDAY_MOOD.get(weekday, "neutral")
 
     output = llm(
         prompt,
         max_tokens=200,
-        temperature=0.1,
-        top_p=0.8,
+        temperature=0.2,
+        top_p=0.85,
         repeat_penalty=1.1,
         stop=["<|eot_id|>", "<|end_of_text|>"],
     )
@@ -193,7 +195,9 @@ def chat_fn(message, history, location):
             continue
         filtered.append(line)
     reply = "\n".join(filtered).strip()
-    return f"Weather ({loc_name}): {weather}\n{reply}" if reply else f"Weather ({loc_name}): {weather}"
+    if not reply:
+        reply = f"That's it—current conditions only. Mood today: {mood}."
+    return f"Weather ({loc_name}): {weather}\n{reply}"
 
 location_box = gr.Textbox(label="Location (city)", value="Stockholm")
 
