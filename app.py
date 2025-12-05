@@ -67,9 +67,16 @@ def get_weather(lat, lon, day=0):
     
     try:
         r = requests.get(url, timeout=5)
+        r.raise_for_status()  # Check for HTTP errors
         data = r.json()
         
+        # Check if API returned an error
+        if "error" in data:
+            return {"error": f"API error: {data['error']}"}
+        
         if day == 0:
+            if "current" not in data:
+                return {"error": f"API response missing 'current' key. Available keys: {list(data.keys())}"}
             cur = data["current"]
             return {
                 "temp": cur["temperature_2m"],
@@ -81,6 +88,8 @@ def get_weather(lat, lon, day=0):
                 "time": cur.get("time", "N/A"),
             }
         else:
+            if "daily" not in data:
+                return {"error": f"API response missing 'daily' key. Available keys: {list(data.keys())}"}
             daily = data["daily"]
             idx = min(day - 1, 6)
             # Get the date for this forecast day
@@ -97,8 +106,12 @@ def get_weather(lat, lon, day=0):
                 "date": forecast_date,
                 "day_index": idx,
             }
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Request failed: {str(e)}"}
+    except KeyError as e:
+        return {"error": f"Missing key in API response: {e}"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {str(e)}"}
 
 def parse_day(message):
     """Determine which day: 0=today, 1=tomorrow, 2=day after, etc."""
