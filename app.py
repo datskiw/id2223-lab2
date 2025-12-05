@@ -143,6 +143,15 @@ def get_weather(lat, lon, day=0):
 def parse_day(message):
     """Determine which day: 0=today, 1=tomorrow, 2=day after, etc."""
     msg = message.lower()
+    # Word-to-number mapping for 0-7
+    word_map = {
+        "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
+        "five": 5, "six": 6, "seven": 7
+    }
+    for word, num in word_map.items():
+        if f"in {word} days" in msg or f"day {word}" in msg:
+            return num
+    # Numeric patterns
     if "today" in msg:
         return 0
     if "day after tomorrow" in msg:
@@ -236,17 +245,20 @@ def chat_fn(message, history, location, show_raw_data):
         precip_prob = w.get('precip_prob', 0)
         precip = w.get('precip', 0)
         has_precip = (precip_prob > 0 or precip > 0)
+        wind = w.get('wind')
         if "temp_max" in weather_data:
             rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if has_precip else ""
+            wind_part = f" Wind around {wind} m/s." if wind is not None else ""
             reply = (
                 f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
-                f"{rain_part}"
+                f"{wind_part}{rain_part}"
             )
         else:
             rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if has_precip else ""
+            wind_part = f" Wind {wind} m/s." if wind is not None else ""
             reply = (
                 f"The weather is {w['description']} with a temperature of {w['temp']}°C."
-                f"{rain_part}"
+                f"{wind_part}{rain_part}"
             )
     
     # If model gives vague answer, replace with actual data
