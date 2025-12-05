@@ -94,11 +94,10 @@ def get_weather(lat=59.33, lon=18.07):
         print(f"[weather] request failed: {e}")
         return f"Could not fetch weather data ({e})"
 
-def build_prompt(history, message):
+def build_prompt(history, message, weather):
     """Turn chat history + new user message into a Llama 3.2 style prompt."""
     weekday = datetime.utcnow().weekday()  # 0=Mon
     mood = WEEKDAY_MOOD.get(weekday, "neutral")
-    weather = get_weather()
 
     system_prompt = (
         "You are a moody weather presenter. "
@@ -128,7 +127,8 @@ def build_prompt(history, message):
     return prompt
 
 def chat_fn(message, history):
-    prompt = build_prompt(history, message)
+    weather = get_weather()
+    prompt = build_prompt(history, message, weather)
 
     output = llm(
         prompt,
@@ -140,7 +140,8 @@ def chat_fn(message, history):
     )
 
     reply = output["choices"][0]["text"].strip()
-    return reply
+    # Prepend deterministic weather line to prevent the model from omitting it
+    return f"Weather: {weather}\n{reply}"
 
 demo = gr.ChatInterface( #a gradio class which shows a chat bubble UIwhich passes message and history into fn and display returned string from fn
     fn=chat_fn,
