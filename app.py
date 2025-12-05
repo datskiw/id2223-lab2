@@ -91,6 +91,7 @@ def get_weather(lat=59.33, lon=18.07):
         code_desc = WEATHER_CODES.get(code, "unknown")
         return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc} (code {code})"
     except Exception as e:
+        print(f"[weather] request failed: {e}")
         return f"Could not fetch weather data ({e})"
 
 def build_prompt(history, message):
