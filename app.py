@@ -229,40 +229,25 @@ def chat_fn(message, history, location, show_raw_data):
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
     reply = output["choices"][0]["text"].strip()
     
-    # Check if it's a general weather question
+    # For general weather questions, always provide a concise deterministic summary
     is_general = is_general_weather_question(message)
-    
-    # For general weather questions, ensure comprehensive response
     if is_general:
-        reply_lower = reply.lower()
         w = weather_data
-        
-        # Check if reply includes temperature
-        has_temp = any(word in reply_lower for word in ["°c", "celsius", "temperature", "temp", str(w.get('temp', w.get('temp_max', '')))])
-        # Check if reply includes condition
-        has_condition = w['description'].lower() in reply_lower or any(word in reply_lower for word in ["sunny", "cloudy", "overcast", "rain", "drizzle"])
-        # Check if reply includes rain info (only needed if there's precipitation)
         precip_prob = w.get('precip_prob', 0)
         precip = w.get('precip', 0)
-        needs_rain_info = (precip_prob > 0 or precip > 0)
-        has_rain = needs_rain_info and any(word in reply_lower for word in ["rain", "precipitation", "precip", str(precip_prob)])
-        
-        # If missing required info, generate comprehensive response
-        if not has_temp or not has_condition or (needs_rain_info and not has_rain):
-            if "temp_max" in weather_data:
-                # Forecast
-                rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if needs_rain_info else ""
-                reply = (
-                    f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
-                    f"{rain_part}"
-                )
-            else:
-                # Current
-                rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if needs_rain_info else ""
-                reply = (
-                    f"The weather is {w['description']} with a temperature of {w['temp']}°C."
-                    f"{rain_part}"
-                )
+        has_precip = (precip_prob > 0 or precip > 0)
+        if "temp_max" in weather_data:
+            rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if has_precip else ""
+            reply = (
+                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
+                f"{rain_part}"
+            )
+        else:
+            rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if has_precip else ""
+            reply = (
+                f"The weather is {w['description']} with a temperature of {w['temp']}°C."
+                f"{rain_part}"
+            )
     
     # If model gives vague answer, replace with actual data
     vague_phrases = ["i'm not sure", "i don't know", "i'm uncertain", "unable to", "cannot determine"]
@@ -286,23 +271,6 @@ def chat_fn(message, history, location, show_raw_data):
                 f"The weather is {w['description']} with a temperature of {w['temp']}°C."
                 f"{rain_part}"
             )
-    
-    # Remove redundant mentions of 0% precipitation or "no precipitation" 
-    # (only mention precipitation when there's actually a chance)
-    precip_prob = weather_data.get('precip_prob', 0)
-    precip = weather_data.get('precip', 0)
-    if precip_prob == 0 and precip == 0:
-        # Remove phrases about no precipitation or 0% chance
-        reply = re.sub(r'\s*[Tt]he precipitation chance is 0%[^.]*\.', '', reply)
-        reply = re.sub(r'\s*[Tt]here is no precipitation expected[^.]*\.', '', reply)
-        reply = re.sub(r'\s*[Aa]nd there is no precipitation expected[^.]*\.', '', reply)
-        reply = re.sub(r'\s*[Nn]o precipitation expected[^.]*\.', '', reply)
-        reply = re.sub(r'\s*[Pp]recipitation chance is 0%[^.]*\.', '', reply)
-        reply = re.sub(r'\s*[Ww]ith 0% chance of precipitation[^.]*\.', '', reply)
-        # Clean up any double spaces or trailing commas
-        reply = re.sub(r'\s+', ' ', reply).strip()
-        reply = re.sub(r',\s*\.', '.', reply)
-        reply = re.sub(r'\s*,\s*$', '', reply)
     
     # Fix incorrect weather descriptions - check if model contradicts the actual description
     actual_description = weather_data.get("description", "").lower()
