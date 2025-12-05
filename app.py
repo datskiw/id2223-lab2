@@ -147,9 +147,15 @@ def chat_fn(message, history):
         stop=["<|eot_id|>", "<|end_of_text|>"],
     )
 
-    reply = output["choices"][0]["text"].strip()
-    # Prepend deterministic weather line to prevent the model from omitting it
-    return f"Weather: {weather}\n{reply}"
+    raw_reply = output["choices"][0]["text"].strip()
+    # Drop any model-generated weather lines to avoid duplicates/conflicts
+    filtered = []
+    for line in raw_reply.splitlines():
+        if line.strip().lower().startswith("weather:"):
+            continue
+        filtered.append(line)
+    reply = "\n".join(filtered).strip()
+    return f"Weather: {weather}\n{reply}" if reply else f"Weather: {weather}"
 
 demo = gr.ChatInterface( #a gradio class which shows a chat bubble UIwhich passes message and history into fn and display returned string from fn
     fn=chat_fn,
