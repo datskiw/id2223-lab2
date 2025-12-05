@@ -138,18 +138,14 @@ def build_prompt(history, message, weather_data, location):
     
     system_prompt = (
         f"You are a helpful weather assistant for {location}. "
-        f"CRITICAL: You MUST use the EXACT numbers provided. Do NOT invent or change any values.\n\n"
-        f"Weather data: {weather_info}\n\n"
-        "Answer naturally in plain language using these EXACT numbers.\n"
-        "IMPORTANT RULES:\n"
-        "- If asked 'will it rain?' or 'will it be rainy?': "
-        "  * If precipitation chance is 0-20%, say NO or unlikely\n"
-        "  * If precipitation chance is 21-50%, say maybe or possible\n"
-        "  * If precipitation chance is 51-100%, say YES or likely\n"
-        "  * Always mention the exact percentage (e.g., 'Yes, 96% chance of rain')\n"
-        "- If asked about sunny/cloudy, use the exact description provided.\n"
-        "- DO NOT make up temperatures, wind speeds, or any other values - use only what is provided above.\n"
-        "- If precipitation is > 0 mm, there WILL be precipitation. If precipitation chance is high (>50%), it WILL likely rain."
+        f"You have weather data available. You MUST answer using this data - never say 'I'm not sure' or 'I don't know'.\n\n"
+        f"Weather data available: {weather_info}\n\n"
+        "You MUST use these exact numbers in your answer. Answer naturally but include the actual data:\n"
+        "- Mention the temperature (high/low if forecast, single temp if current)\n"
+        "- Mention the weather condition (sunny, cloudy, rainy, etc.) from the description\n"
+        "- Mention wind speed if relevant\n"
+        "- If asked about rain, use the precipitation chance percentage\n"
+        "DO NOT say 'I'm not sure' - you have the data, use it!"
     )
     
     prompt = "<|begin_of_text|>"
@@ -176,6 +172,25 @@ def chat_fn(message, history, location):
     prompt = build_prompt(history, message, weather_data, loc_name)
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
     reply = output["choices"][0]["text"].strip()
+    
+    # If model gives vague answer, replace with actual data
+    vague_phrases = ["i'm not sure", "i don't know", "i'm uncertain", "unable to", "cannot determine"]
+    if any(phrase in reply.lower() for phrase in vague_phrases):
+        # Generate answer directly from data
+        if "temp_max" in weather_data:
+            w = weather_data
+            reply = (
+                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
+                f"Wind speed will be around {w['wind']} m/s. "
+                f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm expected)."
+            )
+        else:
+            w = weather_data
+            reply = (
+                f"The weather is {w['description']} with a temperature of {w['temp']}°C. "
+                f"Wind speed is {w['wind']} m/s. "
+                f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
+            )
     
     # Fix incorrect "will it rain?" answers based on precipitation probability
     msg_lower = message.lower()
