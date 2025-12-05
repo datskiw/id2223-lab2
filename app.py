@@ -40,8 +40,9 @@ def get_weather(lat=59.33, lon=18.07):
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}&current=temperature_2m,weathercode,wind_speed_10m"
     )
+    headers = {"User-Agent": "gradio-llama-weather/1.0"}
     try:
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, timeout=8, headers=headers)
         r.raise_for_status()
         data = r.json()
         cur = data.get("current", {})
