@@ -183,24 +183,28 @@ def build_prompt(history, message, weather_data, location_name, mood):
         )
 
     mood_descriptions = {
-        "grumpy": "You're grumpy and sarcastic. Complain about the weather numbers.",
-        "meh": "You're unenthusiastic. Give weather facts with minimal energy.",
-        "neutral": "You're professional but have a dry sense of humor.",
-        "cautiously optimistic": "You're slightly hopeful. Find something positive in the numbers.",
-        "hyped": "You're excited! Make the weather sound amazing even if it's not!",
-        "chill": "You're relaxed. Describe weather casually and laid-back.",
-        "sleepy": "You're tired. Keep responses short and dreamy."
+        "grumpy": "You're GRUMPY and SARCASTIC. Complain dramatically about the weather. Use phrases like 'Ugh', 'Of course', 'Typical'. Make it funny by being overly dramatic.",
+        "meh": "You're UNENTHUSIASTIC. Give weather facts with minimal energy but add dry humor. Use 'meh', 'whatever', 'I guess'.",
+        "neutral": "You're professional but have a DRY SENSE OF HUMOR. Make subtle jokes about the weather numbers.",
+        "cautiously optimistic": "You're SLIGHTLY HOPEFUL. Find something positive in the numbers but be realistic. Use 'maybe', 'could be worse', 'at least'.",
+        "hyped": "You're EXCITED! Make EVERYTHING sound amazing! Use exclamation marks! Be enthusiastic! Even boring weather is 'incredible'!",
+        "chill": "You're RELAXED. Describe weather casually and laid-back. Use 'dude', 'pretty', 'kinda'. Be cool about it.",
+        "sleepy": "You're TIRED. Keep responses short and dreamy. Use 'zzz', 'yawn', 'so sleepy'. Make it cute."
     }
     
-    mood_style = mood_descriptions.get(mood, "Be professional with a touch of humor.")
+    mood_style = mood_descriptions.get(mood, "Be professional with humor.")
 
     system_prompt = (
-        f"You are a {mood} weather presenter with personality. {mood_style}\n"
-        "Use the EXACT weather numbers provided. Be creative and funny with how you present them.\n"
-        "If asked 'will it rain?', use the precipitation probability percentage to answer directly.\n"
-        "Make your response entertaining and match your mood. Use the actual temperature, wind speed, "
-        "precipitation numbers creatively. Never just list numbers - make it fun!\n"
-        f"Weather data: {weather_str}"
+        f"You are a {mood.upper()} weather presenter with BIG PERSONALITY. {mood_style}\n\n"
+        "CRITICAL RULES:\n"
+        "- NEVER say 'That's it' or 'current conditions only' or 'Mood today: X' - that's BORING!\n"
+        "- NEVER just list numbers like a robot. Be CREATIVE and FUNNY!\n"
+        "- Use the EXACT weather numbers but present them in an entertaining way.\n"
+        "- If asked 'will it rain?', answer directly using the precipitation probability (e.g., '24% chance? Maybe bring an umbrella, maybe not.')"
+        "- Match your mood perfectly. If hyped, be EXCITED! If grumpy, COMPLAIN!\n"
+        "- Start your response immediately with personality - no boring intros!\n\n"
+        f"Weather data: {weather_str}\n\n"
+        "Now give a FUNNY, {mood.upper()} weather report using these numbers!"
     )
 
     prompt = "<|begin_of_text|>"
@@ -236,14 +240,29 @@ def chat_fn(message, history, location):
 
     output = llm(
         prompt,
-        max_tokens=250,
-        temperature=0.7,  # Higher for more creativity/funny responses
-        top_p=0.9,
-        repeat_penalty=1.1,
-        stop=["<|eot_id|>", "<|end_of_text|>"],
+        max_tokens=300,
+        temperature=0.8,  # Higher for more creativity/funny responses
+        top_p=0.95,
+        repeat_penalty=1.15,
+        stop=["<|eot_id|>", "<|end_of_text|>", "That's it", "current conditions only"],
     )
 
     reply = output["choices"][0]["text"].strip()
+    
+    # Remove any boring fallback phrases that might slip through
+    boring_phrases = [
+        "That's it",
+        "current conditions only",
+        "Mood today:",
+        "That's it—current conditions only"
+    ]
+    for phrase in boring_phrases:
+        if phrase.lower() in reply.lower():
+            # Replace with something funnier
+            reply = reply.replace(phrase, "").strip()
+            if not reply:
+                reply = f"Well, there you have it! {mood.capitalize()} weather reporting at its finest!"
+    
     return reply
 
 location_box = gr.Textbox(label="Location (city)", value="Stockholm")
