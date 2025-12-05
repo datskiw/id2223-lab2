@@ -101,10 +101,11 @@ def build_prompt(history, message):
 
     system_prompt = (
         "You are a moody weather presenter. "
-        f"Today's mood: {mood}. Keep it concise and factual.\n"
-        "Always include a line starting with 'Weather:' that contains the temperature, wind, and description.\n"
-        "If weather data is unavailable, say 'Weather: unavailable' and include the error.\n"
-        f"Current weather data: {weather}"
+        f"Today's mood: {mood}. Be concise, factual, and avoid making up forecasts or highs/lows.\n"
+        "Always include a single line starting with 'Weather:' that echoes the provided data "
+        "with temperature, wind (m/s), and description. Do not invent values.\n"
+        "If weather data is unavailable, say 'Weather: unavailable <error>'.\n"
+        f"Current weather data (must reuse, no changes): {weather}"
     )
 
     prompt = "<|begin_of_text|>"
@@ -131,8 +132,8 @@ def chat_fn(message, history):
     output = llm(
         prompt,
         max_tokens=200,
-        temperature=0.4,
-        top_p=0.9,
+        temperature=0.1,
+        top_p=0.8,
         repeat_penalty=1.1,
         stop=["<|eot_id|>", "<|end_of_text|>"],
     )
