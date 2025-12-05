@@ -163,6 +163,23 @@ def parse_day(message):
             return i
     return 0  # default to today
 
+def get_condition_emoji(description: str) -> str:
+    """Map weather description to an emoji for quick flair."""
+    desc = (description or "").lower()
+    if any(word in desc for word in ["thunder", "storm"]):
+        return "⛈️"
+    if any(word in desc for word in ["snow", "sleet"]):
+        return "❄️"
+    if any(word in desc for word in ["rain", "drizzle", "shower"]):
+        return "🌧️"
+    if any(word in desc for word in ["fog", "mist", "rime"]):
+        return "🌫️"
+    if "overcast" in desc or "cloud" in desc:
+        return "☁️"
+    if "clear" in desc or "sun" in desc:
+        return "☀️"
+    return "🌍"
+
 def is_general_weather_question(message):
     """Detect if this is a general weather question (not specific like 'will it rain?')."""
     msg_lower = message.lower()
@@ -242,6 +259,7 @@ def chat_fn(message, history, location, show_raw_data):
     is_general = is_general_weather_question(message)
     if is_general:
         w = weather_data
+        emoji = get_condition_emoji(w.get('description', ''))
         precip_prob = w.get('precip_prob', 0)
         precip = w.get('precip', 0)
         has_precip = (precip_prob > 0 or precip > 0)
@@ -250,14 +268,14 @@ def chat_fn(message, history, location, show_raw_data):
             rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if has_precip else ""
             wind_part = f" Wind around {wind} m/s." if wind is not None else ""
             reply = (
-                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
+                f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
                 f"{wind_part}{rain_part}"
             )
         else:
             rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if has_precip else ""
             wind_part = f" Wind {wind} m/s." if wind is not None else ""
             reply = (
-                f"The weather is {w['description']} with a temperature of {w['temp']}°C."
+                f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C."
                 f"{wind_part}{rain_part}"
             )
     
@@ -267,20 +285,22 @@ def chat_fn(message, history, location, show_raw_data):
         # Generate answer directly from data
         if "temp_max" in weather_data:
             w = weather_data
+            emoji = get_condition_emoji(w.get('description', ''))
             precip_prob = w.get('precip_prob', 0)
             precip = w.get('precip', 0)
             rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm expected)." if (precip_prob > 0 or precip > 0) else ""
             reply = (
-                f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
+                f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
                 f"{rain_part}"
             )
         else:
             w = weather_data
+            emoji = get_condition_emoji(w.get('description', ''))
             precip_prob = w.get('precip_prob', 0)
             precip = w.get('precip', 0)
             rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm)." if (precip_prob > 0 or precip > 0) else ""
             reply = (
-                f"The weather is {w['description']} with a temperature of {w['temp']}°C."
+                f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C."
                 f"{rain_part}"
             )
     
@@ -313,15 +333,17 @@ def chat_fn(message, history, location, show_raw_data):
                 # Replace with correct description
                 if "temp_max" in weather_data:
                     w = weather_data
+                    emoji = get_condition_emoji(w.get('description', ''))
                     reply = (
-                        f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
+                        f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
                         f"Wind speed will be around {w['wind']} m/s. "
                         f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm expected)."
                     )
                 else:
                     w = weather_data
+                    emoji = get_condition_emoji(w.get('description', ''))
                     reply = (
-                        f"The weather is {w['description']} with a temperature of {w['temp']}°C. "
+                        f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C. "
                         f"Wind speed is {w['wind']} m/s. "
                         f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
                     )
