@@ -187,7 +187,7 @@ def build_prompt(history, message, weather_data, location):
     prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
     return prompt
 
-def chat_fn(message, history, location):
+def chat_fn(message, history, location, show_raw_data):
     lat, lon, loc_name = geocode_location(location)
     day = parse_day(message)
     weather_data = get_weather(lat, lon, day)
@@ -276,33 +276,38 @@ def chat_fn(message, history, location):
         elif precip_prob < 20 and any(word in reply_lower for word in ["yes", "will", "likely"]):
             reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
     
-    # Append raw data for verification (from Open-Meteo API)
-    verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
+    # Append raw data for verification (from Open-Meteo API) if enabled
+    if show_raw_data:
+        verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
+        
+        if "temp_max" in weather_data:
+            date_info = f", date: {weather_data.get('date', 'N/A')}" if weather_data.get('date') else ""
+            raw_data = (
+                f"\n\n[Raw data from Open-Meteo API (day {day}, index {weather_data.get('day_index', 'N/A')}{date_info}): "
+                f"High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, "
+                f"{weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+                f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+                f"[Verify on Open-Meteo: {verify_url}]"
+            )
+        else:
+            time_info = f", time: {weather_data.get('time', 'N/A')}" if weather_data.get('time') else ""
+            raw_data = (
+                f"\n\n[Raw data from Open-Meteo API (day {day}{time_info}): "
+                f"Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, "
+                f"precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+                f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+                f"[Verify on Open-Meteo: {verify_url}]"
+            )
+        return reply + raw_data
     
-    if "temp_max" in weather_data:
-        date_info = f", date: {weather_data.get('date', 'N/A')}" if weather_data.get('date') else ""
-        raw_data = (
-            f"\n\n[Raw data from Open-Meteo API (day {day}, index {weather_data.get('day_index', 'N/A')}{date_info}): "
-            f"High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, "
-            f"{weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
-            f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
-            f"[Verify on Open-Meteo: {verify_url}]"
-        )
-    else:
-        time_info = f", time: {weather_data.get('time', 'N/A')}" if weather_data.get('time') else ""
-        raw_data = (
-            f"\n\n[Raw data from Open-Meteo API (day {day}{time_info}): "
-            f"Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, "
-            f"precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
-            f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
-            f"[Verify on Open-Meteo: {verify_url}]"
-        )
-    
-    return reply + raw_data
+    return reply
 
 demo = gr.ChatInterface(
     fn=chat_fn,
-    additional_inputs=[gr.Textbox(label="Location (city)", value="Stockholm")],
+    additional_inputs=[
+        gr.Textbox(label="Location (city)", value="Stockholm"),
+        gr.Checkbox(label="Show raw data", value=True, info="Display raw API data and verification links")
+    ],
     title="Weather Assistant",
     description="Ask about weather today, tomorrow, or any of the next 7 days. Enter a city name first!",
 )
