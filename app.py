@@ -77,10 +77,15 @@ def get_weather(lat, lon, day=0):
                 "description": WEATHER_CODES.get(cur["weathercode"], "unknown"),
                 "precip": cur["precipitation"],
                 "precip_prob": cur["precipitation_probability"],
+                "api_url": url,
+                "time": cur.get("time", "N/A"),
             }
         else:
             daily = data["daily"]
             idx = min(day - 1, 6)
+            # Get the date for this forecast day
+            dates = daily.get("time", [])
+            forecast_date = dates[idx] if dates and idx < len(dates) else "N/A"
             return {
                 "temp_max": daily["temperature_2m_max"][idx],
                 "temp_min": daily["temperature_2m_min"][idx],
@@ -88,6 +93,9 @@ def get_weather(lat, lon, day=0):
                 "description": WEATHER_CODES.get(daily["weathercode"][idx], "unknown"),
                 "precip": daily["precipitation_sum"][idx],
                 "precip_prob": daily["precipitation_probability_max"][idx],
+                "api_url": url,
+                "date": forecast_date,
+                "day_index": idx,
             }
     except Exception as e:
         return {"error": str(e)}
@@ -173,10 +181,26 @@ def chat_fn(message, history, location):
             reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
     
     # Append raw data for verification (from Open-Meteo API)
+    verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
+    
     if "temp_max" in weather_data:
-        raw_data = f"\n\n[Raw data from Open-Meteo (day {day}): High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+        date_info = f", date: {weather_data.get('date', 'N/A')}" if weather_data.get('date') else ""
+        raw_data = (
+            f"\n\n[Raw data from Open-Meteo API (day {day}, index {weather_data.get('day_index', 'N/A')}{date_info}): "
+            f"High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, "
+            f"{weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+            f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+            f"[Verify on Open-Meteo: {verify_url}]"
+        )
     else:
-        raw_data = f"\n\n[Raw data from Open-Meteo (day {day}): Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+        time_info = f", time: {weather_data.get('time', 'N/A')}" if weather_data.get('time') else ""
+        raw_data = (
+            f"\n\n[Raw data from Open-Meteo API (day {day}{time_info}): "
+            f"Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, "
+            f"precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+            f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+            f"[Verify on Open-Meteo: {verify_url}]"
+        )
     
     return reply + raw_data
 
