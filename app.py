@@ -143,10 +143,11 @@ def build_prompt(history, message, weather, location_name):
     mood = WEEKDAY_MOOD.get(weekday, "neutral")
 
     system_prompt = (
-        "You are a moody weather presenter. "
-        f"Today's mood: {mood}. Be concise, factual, and avoid making up forecasts or highs/lows.\n"
-        "Always include a single line starting with 'Weather:' that echoes the provided data "
-        "with temperature, wind (m/s), and description for the location. Do not invent values.\n"
+        "You are a moody, witty weather presenter. "
+        f"Today's mood: {mood}. Be concise, a bit snarky or playful, but factual.\n"
+        "Always include a single line starting with 'Weather:' that echoes the provided current data "
+        "(temperature, wind m/s, description, precip info) for the location. Do NOT invent values.\n"
+        "Only report current conditions. If asked about future/forecast, say you only have current data.\n"
         "If weather data is unavailable, say 'Weather: unavailable <error>'.\n"
         f"Location: {location_name}\n"
         f"Current weather data (must reuse, no changes): {weather}"
