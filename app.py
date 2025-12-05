@@ -218,11 +218,53 @@ def chat_fn(message, history, location):
                 f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
             )
     
+    # Fix incorrect weather descriptions - check if model contradicts the actual description
+    actual_description = weather_data.get("description", "").lower()
+    reply_lower = reply.lower()
+    
+    # Map of contradictory descriptions
+    sunny_words = ["sunny", "clear", "bright"]
+    cloudy_words = ["cloudy", "overcast", "clouds"]
+    rainy_words = ["rain", "rainy", "drizzle", "precipitation"]
+    
+    # Check if model contradicts the actual description
+    description_contradicts = False
+    if "clear" in actual_description or "mainly clear" in actual_description:
+        if any(word in reply_lower for word in cloudy_words + rainy_words):
+            description_contradicts = True
+    elif "overcast" in actual_description or "cloudy" in actual_description or "partly cloudy" in actual_description:
+        if any(word in reply_lower for word in sunny_words):
+            description_contradicts = True
+    elif "drizzle" in actual_description or "rain" in actual_description:
+        if any(word in reply_lower for word in sunny_words):
+            description_contradicts = True
+    
+    # If contradiction detected, replace the incorrect part with correct description
+    if description_contradicts:
+        # Replace incorrect weather description in reply
+        for word in sunny_words + cloudy_words + rainy_words:
+            if word in reply_lower and word not in actual_description:
+                # Replace with correct description
+                if "temp_max" in weather_data:
+                    w = weather_data
+                    reply = (
+                        f"The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
+                        f"Wind speed will be around {w['wind']} m/s. "
+                        f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm expected)."
+                    )
+                else:
+                    w = weather_data
+                    reply = (
+                        f"The weather is {w['description']} with a temperature of {w['temp']}°C. "
+                        f"Wind speed is {w['wind']} m/s. "
+                        f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
+                    )
+                break
+    
     # Fix incorrect "will it rain?" answers based on precipitation probability
     msg_lower = message.lower()
     if any(word in msg_lower for word in ["will it rain", "rain", "rainy", "precipitation"]):
         precip_prob = weather_data.get("precip_prob", 0)
-        reply_lower = reply.lower()
         
         # If model says NO but precip_prob is high, correct it
         if precip_prob >= 50 and any(word in reply_lower for word in ["no", "not", "won't", "will not", "unlikely"]):
