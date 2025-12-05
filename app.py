@@ -107,11 +107,12 @@ def get_weather(lat=59.33, lon=18.07, forecast_days=0):
             "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,precipitation_probability_max,wind_speed_10m_max"
         )
     headers = {"User-Agent": "gradio-llama-weather/1.0"}
-    last_err = "unknown"
+    last_err = "unknown error"
     for attempt in range(3):
         try:
             r = requests.get(url, timeout=8, headers=headers)
             if r.status_code == 429:
+                last_err = "429 Too Many Requests"
                 time.sleep(1 + attempt)
                 continue
             r.raise_for_status()
@@ -236,6 +237,21 @@ def chat_fn(message, history, location):
     forecast_days = 1 if wants_forecast else 0
     
     weather_data = get_weather(lat=lat, lon=lon, forecast_days=forecast_days)
+
+    # If weather fetch failed, avoid hallucination: return graceful moodful message without numbers
+    if weather_data.get("error"):
+        err = weather_data.get("error")
+        mood_lines = {
+            "grumpy": "Ugh, even the weather feed bailed. Try again later.",
+            "meh": "Meh, no data right now. Maybe later.",
+            "neutral": "Weather data unavailable at the moment. Try again shortly.",
+            "cautiously optimistic": "No data now, but maybe it’ll show up soon.",
+            "hyped": "Whoa, the weather API took a coffee break. Ping me in a bit!",
+            "chill": "No data, dude. Let’s try again later.",
+            "sleepy": "Zzz… no weather data. Maybe after a nap."
+        }
+        fallback = mood_lines.get(mood, "Weather data unavailable right now.")
+        return f"Weather ({loc_name}): unavailable ({err}). {fallback}"
     prompt = build_prompt(history, message, weather_data, loc_name, mood)
 
     output = llm(
