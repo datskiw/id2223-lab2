@@ -91,66 +91,116 @@ def geocode_location(location: str, fallback_lat=59.33, fallback_lon=18.07):
         return fallback_lat, fallback_lon, "Stockholm"
 
 
-def get_weather(lat=59.33, lon=18.07):
-    """Fetch current weather from Open-Meteo for given coordinates."""
-    url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,weathercode,wind_speed_10m,precipitation,precipitation_probability"
-    )
+def get_weather(lat=59.33, lon=18.07, forecast_days=0):
+    """Fetch current or forecast weather from Open-Meteo. forecast_days=0 for current, 1+ for forecast."""
+    if forecast_days == 0:
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            "&current=temperature_2m,weathercode,wind_speed_10m,precipitation,precipitation_probability"
+        )
+    else:
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&forecast_days={min(forecast_days, 7)}"
+            "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,precipitation_probability_max,wind_speed_10m_max"
+        )
     headers = {"User-Agent": "gradio-llama-weather/1.0"}
     last_err = "unknown"
     for attempt in range(3):
         try:
             r = requests.get(url, timeout=8, headers=headers)
             if r.status_code == 429:
-                # backoff and retry on rate limit
                 time.sleep(1 + attempt)
                 continue
             r.raise_for_status()
             data = r.json()
-            cur = data.get("current", {})
-            temp = cur.get("temperature_2m")
-            # API returns km/h; convert to m/s for clarity
-            wind_kmh = cur.get("wind_speed_10m")
-            wind_ms = None
-            if wind_kmh is not None:
-                try:
-                    wind_ms = round(float(wind_kmh) / 3.6, 1)
-                except Exception:
-                    wind_ms = wind_kmh
-            code = cur.get("weathercode")
-            code_desc = WEATHER_CODES.get(code, "unknown")
-            precip = cur.get("precipitation")
-            precip_prob = cur.get("precipitation_probability")
-            extras = []
-            if precip_prob is not None:
-                extras.append(f"precip chance {precip_prob}%")
-            if precip is not None:
-                extras.append(f"precip {precip} mm")
-            extras_str = ", ".join(extras) if extras else ""
-            extras_str = f", {extras_str}" if extras_str else ""
-            return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc}{extras_str}"
+            
+            if forecast_days == 0:
+                # Current weather
+                cur = data.get("current", {})
+                temp = cur.get("temperature_2m")
+                wind_kmh = cur.get("wind_speed_10m")
+                wind_ms = round(float(wind_kmh) / 3.6, 1) if wind_kmh is not None else None
+                code = cur.get("weathercode")
+                code_desc = WEATHER_CODES.get(code, "unknown")
+                precip = cur.get("precipitation")
+                precip_prob = cur.get("precipitation_probability")
+                return {
+                    "temp": temp,
+                    "wind_ms": wind_ms,
+                    "description": code_desc,
+                    "precip": precip,
+                    "precip_prob": precip_prob,
+                    "type": "current"
+                }
+            else:
+                # Forecast weather
+                daily = data.get("daily", {})
+                temps_max = daily.get("temperature_2m_max", [])
+                temps_min = daily.get("temperature_2m_min", [])
+                codes = daily.get("weathercode", [])
+                precip_sum = daily.get("precipitation_sum", [])
+                precip_prob_max = daily.get("precipitation_probability_max", [])
+                wind_max = daily.get("wind_speed_10m_max", [])
+                day_idx = min(forecast_days - 1, len(temps_max) - 1)
+                wind_ms = round(float(wind_max[day_idx]) / 3.6, 1) if wind_max and wind_max[day_idx] is not None else None
+                return {
+                    "temp_max": temps_max[day_idx] if temps_max else None,
+                    "temp_min": temps_min[day_idx] if temps_min else None,
+                    "wind_ms": wind_ms,
+                    "description": WEATHER_CODES.get(codes[day_idx], "unknown") if codes else "unknown",
+                    "precip": precip_sum[day_idx] if precip_sum else None,
+                    "precip_prob": precip_prob_max[day_idx] if precip_prob_max else None,
+                    "type": "forecast",
+                    "day": forecast_days
+                }
         except Exception as e:
             last_err = e
             print(f"[weather] attempt {attempt+1} failed: {e}")
             time.sleep(0.5 * (attempt + 1))
-    return f"Could not fetch weather data ({last_err})"
+    return {"error": str(last_err)}
 
-def build_prompt(history, message, weather, location_name):
+def build_prompt(history, message, weather_data, location_name, mood):
     """Turn chat history + new user message into a Llama 3.2 style prompt."""
-    weekday = datetime.utcnow().weekday()  # 0=Mon
-    mood = WEEKDAY_MOOD.get(weekday, "neutral")
+    if weather_data.get("error"):
+        weather_str = f"Weather data unavailable: {weather_data['error']}"
+    elif weather_data.get("type") == "forecast":
+        w = weather_data
+        weather_str = (
+            f"Forecast for {location_name}: "
+            f"High {w.get('temp_max')}°C, Low {w.get('temp_min')}°C, "
+            f"wind {w.get('wind_ms')} m/s, {w.get('description')}, "
+            f"precip chance {w.get('precip_prob')}%, precip {w.get('precip')} mm"
+        )
+    else:
+        w = weather_data
+        weather_str = (
+            f"Current weather in {location_name}: "
+            f"{w.get('temp')}°C, wind {w.get('wind_ms')} m/s, {w.get('description')}, "
+            f"precip chance {w.get('precip_prob')}%, precip {w.get('precip')} mm"
+        )
+
+    mood_descriptions = {
+        "grumpy": "You're grumpy and sarcastic. Complain about the weather numbers.",
+        "meh": "You're unenthusiastic. Give weather facts with minimal energy.",
+        "neutral": "You're professional but have a dry sense of humor.",
+        "cautiously optimistic": "You're slightly hopeful. Find something positive in the numbers.",
+        "hyped": "You're excited! Make the weather sound amazing even if it's not!",
+        "chill": "You're relaxed. Describe weather casually and laid-back.",
+        "sleepy": "You're tired. Keep responses short and dreamy."
+    }
+    
+    mood_style = mood_descriptions.get(mood, "Be professional with a touch of humor.")
 
     system_prompt = (
-        "You are a moody, witty weather presenter. "
-        f"Today's mood: {mood}. Be concise, a bit snarky or playful, but factual.\n"
-        "Always include a single line starting with 'Weather:' that echoes the provided current data "
-        "(temperature, wind m/s, description, precip info) for the location. Do NOT invent values.\n"
-        "Only report current conditions. If asked about future/forecast, say you only have current data.\n"
-        "If weather data is unavailable, say 'Weather: unavailable <error>'.\n"
-        f"Location: {location_name}\n"
-        f"Current weather data (must reuse, no changes): {weather}"
+        f"You are a {mood} weather presenter with personality. {mood_style}\n"
+        "Use the EXACT weather numbers provided. Be creative and funny with how you present them.\n"
+        "If asked 'will it rain?', use the precipitation probability percentage to answer directly.\n"
+        "Make your response entertaining and match your mood. Use the actual temperature, wind speed, "
+        "precipitation numbers creatively. Never just list numbers - make it fun!\n"
+        f"Weather data: {weather_str}"
     )
 
     prompt = "<|begin_of_text|>"
@@ -173,41 +223,38 @@ def build_prompt(history, message, weather, location_name):
 
 def chat_fn(message, history, location):
     lat, lon, loc_name = geocode_location(location)
-    weather = get_weather(lat=lat, lon=lon)
-    prompt = build_prompt(history, message, weather, loc_name)
     weekday = datetime.utcnow().weekday()
     mood = WEEKDAY_MOOD.get(weekday, "neutral")
+    
+    # Detect if asking about tomorrow/forecast
+    msg_lower = message.lower()
+    wants_forecast = any(word in msg_lower for word in ["tomorrow", "forecast", "next day", "future"])
+    forecast_days = 1 if wants_forecast else 0
+    
+    weather_data = get_weather(lat=lat, lon=lon, forecast_days=forecast_days)
+    prompt = build_prompt(history, message, weather_data, loc_name, mood)
 
     output = llm(
         prompt,
-        max_tokens=200,
-        temperature=0.2,
-        top_p=0.85,
+        max_tokens=250,
+        temperature=0.7,  # Higher for more creativity/funny responses
+        top_p=0.9,
         repeat_penalty=1.1,
         stop=["<|eot_id|>", "<|end_of_text|>"],
     )
 
-    raw_reply = output["choices"][0]["text"].strip()
-    # Drop any model-generated weather lines to avoid duplicates/conflicts
-    filtered = []
-    for line in raw_reply.splitlines():
-        if line.strip().lower().startswith("weather:"):
-            continue
-        filtered.append(line)
-    reply = "\n".join(filtered).strip()
-    if not reply:
-        reply = f"That's it—current conditions only. Mood today: {mood}."
-    return f"Weather ({loc_name}): {weather}\n{reply}"
+    reply = output["choices"][0]["text"].strip()
+    return reply
 
 location_box = gr.Textbox(label="Location (city)", value="Stockholm")
 
 demo = gr.ChatInterface(
     fn=chat_fn,
     additional_inputs=[location_box],
-    title="Moody Weather Bot (Llama 3)",
+    title="Moody Weather Reporter (Llama 3)",
     description=(
-        "Get real weather by location with a mood that changes by weekday. "
-        "Enter a city, then ask your question."
+        "A funny weather reporter with personality! Mood changes by weekday (Mon=grumpy, Fri=hyped). "
+        "Ask about current weather, tomorrow's forecast, or 'will it rain?'. Enter a city name first!"
     ),
 )
 
