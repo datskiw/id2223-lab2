@@ -97,6 +97,8 @@ def parse_day(message):
     msg = message.lower()
     if "today" in msg:
         return 0
+    if "day after tomorrow" in msg:
+        return 2
     if "tomorrow" in msg:
         return 1
     for i in range(2, 8):
@@ -115,9 +117,12 @@ def build_prompt(history, message, weather_data, location):
     
     system_prompt = (
         f"You are a helpful weather assistant for {location}. "
-        f"Answer questions about the weather using this data: {weather_info}. "
-        "Answer naturally in plain language. If asked 'will it rain?' use the precipitation probability. "
-        "If asked about sunny/cloudy, use the description."
+        f"CRITICAL: You MUST use the EXACT numbers provided. Do NOT invent or change any values.\n\n"
+        f"Weather data: {weather_info}\n\n"
+        "Answer naturally in plain language using these EXACT numbers. "
+        "If asked 'will it rain?' use the exact precipitation probability percentage. "
+        "If asked about sunny/cloudy, use the exact description provided. "
+        "DO NOT make up temperatures, wind speeds, or any other values - use only what is provided above."
     )
     
     prompt = "<|begin_of_text|>"
@@ -145,11 +150,11 @@ def chat_fn(message, history, location):
     output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
     reply = output["choices"][0]["text"].strip()
     
-    # Append raw data for verification
+    # Append raw data for verification (from Open-Meteo API)
     if "temp_max" in weather_data:
-        raw_data = f"\n\n[Raw data: High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+        raw_data = f"\n\n[Raw data from Open-Meteo (day {day}): High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
     else:
-        raw_data = f"\n\n[Raw data: Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
+        raw_data = f"\n\n[Raw data from Open-Meteo (day {day}): Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]"
     
     return reply + raw_data
 
