@@ -188,6 +188,9 @@ def build_prompt(history, message, weather_data, location):
     return prompt
 
 def chat_fn(message, history, location, show_raw_data):
+    # Debug: check the value being passed
+    print(f"DEBUG: show_raw_data = {show_raw_data} (type: {type(show_raw_data)})")
+    
     lat, lon, loc_name = geocode_location(location)
     day = parse_day(message)
     weather_data = get_weather(lat, lon, day)
@@ -277,6 +280,8 @@ def chat_fn(message, history, location, show_raw_data):
             reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
     
     # Append raw data for verification (from Open-Meteo API) if enabled
+    # Set to False to always hide raw data, True to always show it
+    show_raw_data = False  # Hardcoded - change this to True/False to control display
     if show_raw_data:
         verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
         
@@ -306,7 +311,7 @@ demo = gr.ChatInterface(
     fn=chat_fn,
     additional_inputs=[
         gr.Textbox(label="Location (city)", value="Stockholm"),
-        gr.Checkbox(label="Show raw data", value=True, info="Display raw API data and verification links")
+        gr.Checkbox(label="Show raw data", value=False, info="Display raw API data and verification links")
     ],
     title="Weather Assistant",
     description="Ask about weather today, tomorrow, or any of the next 7 days. Enter a city name first!",
