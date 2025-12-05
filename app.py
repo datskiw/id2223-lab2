@@ -34,6 +34,38 @@ WEEKDAY_MOOD = {
     6: "sleepy",
 }
 
+# Weather code descriptions (Open-Meteo / WMO)
+WEATHER_CODES = {
+    0: "clear sky",
+    1: "mainly clear",
+    2: "partly cloudy",
+    3: "overcast",
+    45: "fog",
+    48: "depositing rime fog",
+    51: "light drizzle",
+    53: "moderate drizzle",
+    55: "dense drizzle",
+    56: "light freezing drizzle",
+    57: "dense freezing drizzle",
+    61: "slight rain",
+    63: "moderate rain",
+    65: "heavy rain",
+    66: "light freezing rain",
+    67: "heavy freezing rain",
+    71: "slight snow fall",
+    73: "moderate snow fall",
+    75: "heavy snow fall",
+    77: "snow grains",
+    80: "slight rain showers",
+    81: "moderate rain showers",
+    82: "violent rain showers",
+    85: "slight snow showers",
+    86: "heavy snow showers",
+    95: "thunderstorm",
+    96: "thunderstorm with slight hail",
+    99: "thunderstorm with heavy hail",
+}
+
 def get_weather(lat=59.33, lon=18.07):
     """Fetch current weather from Open-Meteo. Defaults to Stockholm coords."""
     url = (
@@ -47,9 +79,17 @@ def get_weather(lat=59.33, lon=18.07):
         data = r.json()
         cur = data.get("current", {})
         temp = cur.get("temperature_2m")
-        wind = cur.get("wind_speed_10m")
+        # API returns km/h; convert to m/s for clarity
+        wind_kmh = cur.get("wind_speed_10m")
+        wind_ms = None
+        if wind_kmh is not None:
+            try:
+                wind_ms = round(float(wind_kmh) / 3.6, 1)
+            except Exception:
+                wind_ms = wind_kmh
         code = cur.get("weathercode")
-        return f"Temp {temp}°C, wind {wind} m/s, weather code {code}"
+        code_desc = WEATHER_CODES.get(code, "unknown")
+        return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc} (code {code})"
     except Exception as e:
         return f"Could not fetch weather data ({e})"
 
