@@ -364,9 +364,6 @@ def chat_fn(message, history, location, show_raw_data):
         elif precip_prob < 20 and any(word in reply_lower for word in ["yes", "will", "likely"]):
             reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
     
-    # Append raw data for verification (from Open-Meteo API) if enabled
-    # Set to False to always hide raw data, True to always show it
-    show_raw_data = False  # Hardcoded - change this to True/False to control display
     if show_raw_data:
         verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
         
