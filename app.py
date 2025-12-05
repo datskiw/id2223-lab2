@@ -71,7 +71,8 @@ def get_weather(lat=59.33, lon=18.07):
     """Fetch current weather from Open-Meteo. Defaults to Stockholm coords."""
     url = (
         "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}&current=temperature_2m,weathercode,wind_speed_10m"
+        f"?latitude={lat}&longitude={lon}"
+        "&current=temperature_2m,weathercode,wind_speed_10m,precipitation,precipitation_probability"
     )
     headers = {"User-Agent": "gradio-llama-weather/1.0"}
     for attempt in range(3):
@@ -95,7 +96,16 @@ def get_weather(lat=59.33, lon=18.07):
                     wind_ms = wind_kmh
             code = cur.get("weathercode")
             code_desc = WEATHER_CODES.get(code, "unknown")
-            return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc} (code {code})"
+            precip = cur.get("precipitation")
+            precip_prob = cur.get("precipitation_probability")
+            extras = []
+            if precip_prob is not None:
+                extras.append(f"precip chance {precip_prob}%")
+            if precip is not None:
+                extras.append(f"precip {precip} mm")
+            extras_str = ", ".join(extras) if extras else ""
+            extras_str = f", {extras_str}" if extras_str else ""
+            return f"Temp {temp}°C, wind {wind_ms} m/s, {code_desc}{extras_str}"
         except Exception as e:
             last_err = e
             print(f"[weather] attempt {attempt+1} failed: {e}")
