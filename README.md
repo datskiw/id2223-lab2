@@ -1,3 +1,5 @@
+<!-- YAML for Hugging Face - uncomment when pushing to HF, comment when pushing to GitHub -->
+<!--
 ---
 title: Id2223atw
 emoji: 🌤️
@@ -10,6 +12,7 @@ pinned: false
 license: apache-2.0
 short_description: Fine-tuned Llama 3.2 Weather Assistant
 ---
+-->
 
 # Lab 2: Fine-Tuned Llama 3.2 Weather Assistant
 
