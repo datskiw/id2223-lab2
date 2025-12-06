@@ -21,7 +21,7 @@ CHAT_FORMAT = "chatml"  # Change to "llama3" for Llama models
 
 # Qwen 2 0.5B
 GGUF_REPO_ID = "datskiw/qwen2-0.5b-finetome-q8_0"
-GGUF_FILENAME = "qwen2-0.5b-finetome-q8_0.gguf"
+GGUF_FILENAME = "qwen2-0.5b-finetome-q8_0_best.gguf"
 
 # Download and load model
 gguf_path = hf_hub_download(repo_id=GGUF_REPO_ID, filename=GGUF_FILENAME)
@@ -225,6 +225,16 @@ def is_general_weather_question(message):
     # If it's general and not asking something specific, it's a general weather question
     return is_general and not is_specific
 
+def is_greeting(message: str) -> bool:
+    """Detect simple greetings so we can steer responses toward weather info."""
+    msg = message.lower().strip()
+    greetings = [
+        "hi", "hello", "hey", "heya", "hiya", "yo",
+        "good morning", "good afternoon", "good evening",
+        "how are you", "how's it going", "how are u", "sup"
+    ]
+    return any(msg.startswith(g) or g in msg for g in greetings)
+
 def build_prompt(history, message, weather_data, location):
     """Build prompt with weather data. Supports both Llama 3.2 and Qwen (ChatML) formats."""
     # Use configured chat format
@@ -238,10 +248,11 @@ def build_prompt(history, message, weather_data, location):
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
     system_prompt = (
-        f"You are a helpful weather reporter. Any question the user asks should be directed towards presenting the weather"
+        f"You are a helpful weather reporter. Any question the user asks should be directed towards presenting the weather. Be very nice and conversational!"
         f"You are given fresh weather data and must ground every response in it.\n\n"
         f"Weather data: {weather_info}\n\n"
         "Only give the relevant weather data that the user is specifically asking for. Do not give any other information."
+        "Give tips on activities that they can enjoy in this weather"
         "Rules:\n"
         "- Use the provided numbers and description verbatim; do not invent values.\n"
         "- Keep answers concise (1-3 sentences) and conversational.\n"
@@ -291,6 +302,48 @@ def chat_fn(message, history, location, show_raw_data):
     if weather_data.get("error"):
         # In streaming mode we must yield, not return a plain string
         yield f"Sorry, couldn't fetch weather data: {weather_data['error']}"
+        return
+
+    # Friendly greeting shortcut that still provides immediate weather info
+    if is_greeting(message):
+        if "temp_max" in weather_data:
+            reply = (
+                f"I'm good, thanks! Want a quick weather update for {loc_name}? "
+                f"High {weather_data['temp_max']}°C, low {weather_data['temp_min']}°C, "
+                f"{weather_data['description']}, precipitation chance {weather_data['precip_prob']}%, "
+                f"precipitation {weather_data['precip']} mm, wind {weather_data['wind']} m/s."
+            )
+        else:
+            reply = (
+                f"I'm good, thanks! Want a quick weather update for {loc_name}? "
+                f"Temperature {weather_data['temp']}°C, {weather_data['description']}, "
+                f"precipitation chance {weather_data['precip_prob']}%, "
+                f"precipitation {weather_data['precip']} mm, wind {weather_data['wind']} m/s."
+            )
+
+        if show_raw_data:
+            verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
+            if "temp_max" in weather_data:
+                date_info = f", date: {weather_data.get('date', 'N/A')}" if weather_data.get('date') else ""
+                raw_data = (
+                    f"\n\n[Raw data from Open-Meteo API (day {day}, index {weather_data.get('day_index', 'N/A')}{date_info}): "
+                    f"High {weather_data['temp_max']}°C, Low {weather_data['temp_min']}°C, wind {weather_data['wind']} m/s, "
+                    f"{weather_data['description']}, precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+                    f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+                    f"[Verify on Open-Meteo: {verify_url}]"
+                )
+            else:
+                time_info = f", time: {weather_data.get('time', 'N/A')}" if weather_data.get('time') else ""
+                raw_data = (
+                    f"\n\n[Raw data from Open-Meteo API (day {day}{time_info}): "
+                    f"Temp {weather_data['temp']}°C, wind {weather_data['wind']} m/s, {weather_data['description']}, "
+                    f"precip chance {weather_data['precip_prob']}%, precip {weather_data['precip']} mm]\n"
+                    f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
+                    f"[Verify on Open-Meteo: {verify_url}]"
+                )
+            yield reply.strip() + raw_data
+        else:
+            yield reply.strip()
         return
     
     prompt = build_prompt(history, message, weather_data, loc_name)
