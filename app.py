@@ -5,13 +5,13 @@ import requests
 import time
 import re
 
-# # llama3 1B
-# GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
-# GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
+# llama3 1B
+GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
+GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
 
-# llama3 3B
-GGUF_REPO_ID = "datskiw/llama3-3B-finetome-q8_0"
-GGUF_FILENAME = "llama3-3B-finetome-q8_0.gguf"
+# # llama3 3B
+# GGUF_REPO_ID = "datskiw/llama3-3B-finetome-q8_0"
+# GGUF_FILENAME = "llama3-3B-finetome-q8_0.gguf"
 
 # Download and load model
 gguf_path = hf_hub_download(repo_id=GGUF_REPO_ID, filename=GGUF_FILENAME)
