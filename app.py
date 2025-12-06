@@ -238,7 +238,7 @@ def build_prompt(history, message, weather_data, location):
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
     system_prompt = (
-        f"You are a helpful weather reporter. "
+        f"You are a helpful weather reporter. Any question the user asks should be directed towards presenting the weather"
         f"You are given fresh weather data and must ground every response in it.\n\n"
         f"Weather data: {weather_info}\n\n"
         "Only give the relevant weather data that the user is specifically asking for. Do not give any other information."
