@@ -1,3 +1,5 @@
+<!-- YAML for Hugging Face - uncomment when pushing to HF, comment when pushing to GitHub -->
+<!--
 ---
 title: Id2223atw
 emoji: 🌤️
@@ -10,6 +12,7 @@ pinned: false
 license: apache-2.0
 short_description: Fine-tuned Llama 3.2 Weather Assistant
 ---
+-->
 
 # Lab 2: Fine-Tuned Llama 3.2 Weather Assistant
 
@@ -57,6 +60,22 @@ The weather assistant combines:
 - Error handling and retry logic
 
 ## Task 2: Model and Data-Centric Improvements
+
+### Model Comparison
+
+We compared three fine-tuned models to select the best base architecture for further optimization:
+
+- **Llama 3.2 1B**: 1.22s inference speed, 67% quality score
+- **Llama 3.2 3B**: 2.57s inference speed, 100% quality score  
+- **Qwen 2 0.5B**: 0.54s inference speed, 100% quality score
+
+**Test Methodology**: We measured two metrics using a simple comparison script (`compare_models.py`):
+1. **Inference Speed**: Average time to generate responses (3 runs per model)
+2. **Response Quality**: Percentage of responses that correctly mention weather data (temperature, conditions, precipitation)
+
+**Results**: Qwen 2 0.5B achieved the fastest inference speed (1.21s) while maintaining 100% quality, making it our choice for CPU deployment on Hugging Face Spaces.
+
+**Decision**: We selected **Qwen 2 0.5B** for hyperparameter grid search due to its speed-to-quality ratio.
 
 ### Model-Centric Approaches
 
