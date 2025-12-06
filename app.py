@@ -298,7 +298,9 @@ def chat_fn(message, history, location, show_raw_data):
     weather_data = get_weather(lat, lon, day)
     
     if weather_data.get("error"):
-        return f"Sorry, couldn't fetch weather data: {weather_data['error']}"
+        # In streaming mode we must yield, not return a plain string
+        yield f"Sorry, couldn't fetch weather data: {weather_data['error']}"
+        return
     
     prompt = build_prompt(history, message, weather_data, loc_name)
     # Use appropriate stop tokens based on chat format
