@@ -237,29 +237,18 @@ def build_prompt(history, message, weather_data, location):
         w = weather_data
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
-    # Check if it's a general weather question
-    is_general = is_general_weather_question(message)
-    
-    if is_general:
-        # For general questions, provide comprehensive instructions
-        system_prompt = (
-            f"You are a helpful weather assistant for {location}. "
-            f"You have weather data available. You MUST answer using this data.\n\n"
-            f"Weather data available: {weather_info}\n\n"
-            "For general weather questions, ALWAYS include:\n"
-            "- The temperature (use exact number from data)\n"
-            "- The weather condition (overcast, sunny, cloudy, etc. - use exact description from data)\n"
-            "- Precipitation/rain information ONLY if precipitation chance > 0% or precipitation > 0 mm\n"
-            "Answer naturally and concisely. Use the exact data provided."
-        )
-    else:
-        # For specific questions, answer normally
-        system_prompt = (
-            f"You are a helpful weather assistant for {location}. "
-            f"You have weather data available. You MUST answer using this data - never say 'I'm not sure' or 'I don't know'.\n\n"
-            f"Weather data available: {weather_info}\n\n"
-            "Answer the specific question asked. Use the exact numbers from the data provided."
-        )
+    system_prompt = (
+        f"You are a helpful weather assistant for {location}. "
+        f"You are given fresh weather data and must ground every response in it.\n\n"
+        f"Weather data: {weather_info}\n\n"
+        "Rules:\n"
+        "- Use the provided numbers and description verbatim; do not invent values.\n"
+        "- Keep answers concise (1-3 sentences) and conversational.\n"
+        "- Mention precipitation only when precipitation chance > 0% or precipitation > 0 mm.\n"
+        "- When asked about rain/precipitation, answer directly using precipitation_probability and precipitation.\n"
+        "- For general weather questions, summarize temperature, condition, wind, and mention rain only if relevant.\n"
+        "- For specific questions, address the question while citing the relevant values from the data."
+    )
     
     if is_chatml:
         # ChatML format for Qwen
@@ -321,116 +310,6 @@ def chat_fn(message, history, location, show_raw_data):
     # Final processing on complete reply
     original_reply = reply.strip()
     reply = original_reply
-    
-    # For general weather questions, always provide a concise deterministic summary
-    is_general = is_general_weather_question(message)
-    if is_general:
-        w = weather_data
-        emoji = get_condition_emoji(w.get('description', ''))
-        precip_prob = w.get('precip_prob', 0)
-        precip = w.get('precip', 0)
-        has_precip = (precip_prob > 0 or precip > 0)
-        wind = w.get('wind')
-        if "temp_max" in weather_data:
-            rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm expected)." if has_precip else ""
-            wind_part = f" Wind around {wind} m/s." if wind is not None else ""
-            reply = (
-                f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
-                f"{wind_part}{rain_part}"
-            )
-        else:
-            rain_part = f" There's a {precip_prob}% chance of rain ({precip} mm)." if has_precip else ""
-            wind_part = f" Wind {wind} m/s." if wind is not None else ""
-            reply = (
-                f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C."
-                f"{wind_part}{rain_part}"
-            )
-    
-    # If model gives vague answer, replace with actual data
-    vague_phrases = ["i'm not sure", "i don't know", "i'm uncertain", "unable to", "cannot determine"]
-    if any(phrase in reply.lower() for phrase in vague_phrases):
-        # Generate answer directly from data
-        if "temp_max" in weather_data:
-            w = weather_data
-            emoji = get_condition_emoji(w.get('description', ''))
-            precip_prob = w.get('precip_prob', 0)
-            precip = w.get('precip', 0)
-            rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm expected)." if (precip_prob > 0 or precip > 0) else ""
-            reply = (
-                f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C."
-                f"{rain_part}"
-            )
-        else:
-            w = weather_data
-            emoji = get_condition_emoji(w.get('description', ''))
-            precip_prob = w.get('precip_prob', 0)
-            precip = w.get('precip', 0)
-            rain_part = f" There's a {precip_prob}% chance of precipitation ({precip} mm)." if (precip_prob > 0 or precip > 0) else ""
-            reply = (
-                f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C."
-                f"{rain_part}"
-            )
-    
-    # Fix incorrect weather descriptions - check if model contradicts the actual description
-    actual_description = weather_data.get("description", "").lower()
-    reply_lower = reply.lower()
-    
-    # Map of contradictory descriptions
-    sunny_words = ["sunny", "clear", "bright"]
-    cloudy_words = ["cloudy", "overcast", "clouds"]
-    rainy_words = ["rain", "rainy", "drizzle", "precipitation"]
-    
-    # Check if model contradicts the actual description
-    description_contradicts = False
-    if "clear" in actual_description or "mainly clear" in actual_description:
-        if any(word in reply_lower for word in cloudy_words + rainy_words):
-            description_contradicts = True
-    elif "overcast" in actual_description or "cloudy" in actual_description or "partly cloudy" in actual_description:
-        if any(word in reply_lower for word in sunny_words):
-            description_contradicts = True
-    elif "drizzle" in actual_description or "rain" in actual_description:
-        if any(word in reply_lower for word in sunny_words):
-            description_contradicts = True
-    
-    # If contradiction detected, replace the incorrect part with correct description
-    if description_contradicts:
-        # Replace incorrect weather description in reply
-        for word in sunny_words + cloudy_words + rainy_words:
-            if word in reply_lower and word not in actual_description:
-                # Replace with correct description
-                if "temp_max" in weather_data:
-                    w = weather_data
-                    emoji = get_condition_emoji(w.get('description', ''))
-                    reply = (
-                        f"{emoji} The weather will be {w['description']} with a high of {w['temp_max']}°C and low of {w['temp_min']}°C. "
-                        f"Wind speed will be around {w['wind']} m/s. "
-                        f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm expected)."
-                    )
-                else:
-                    w = weather_data
-                    emoji = get_condition_emoji(w.get('description', ''))
-                    reply = (
-                        f"{emoji} The weather is {w['description']} with a temperature of {w['temp']}°C. "
-                        f"Wind speed is {w['wind']} m/s. "
-                        f"There's a {w['precip_prob']}% chance of precipitation ({w['precip']} mm)."
-                    )
-                break
-    
-    # Deterministic "will it rain?" handling (ignore model speculation like using temperature)
-    msg_lower = message.lower()
-    if any(word in msg_lower for word in ["will it rain", "rain", "rainy", "precipitation"]):
-        precip_prob = weather_data.get("precip_prob", 0) or 0
-        precip_mm = weather_data.get("precip", 0) or 0
-        desc = weather_data.get("description", "precipitation")
-        if precip_prob >= 50:
-            if precip_prob >= 80:
-                reply = f"Yes. There's a {precip_prob}% chance of rain with about {precip_mm} mm expected ({desc})."
-            else:
-                reply = f"Yes. There's a {precip_prob}% chance of rain with about {precip_mm} mm expected."
-        elif precip_prob <= 10:
-            reply = f"No, only a {precip_prob}% chance of rain, so it's unlikely."
-        else:
-            reply = f"Probably not. Chance of rain is {precip_prob}%, precipitation around {precip_mm} mm."
     
     if show_raw_data:
         verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
