@@ -415,20 +415,21 @@ def chat_fn(message, history, location, show_raw_data):
                     )
                 break
     
-    # Fix incorrect "will it rain?" answers based on precipitation probability
+    # Deterministic "will it rain?" handling (ignore model speculation like using temperature)
     msg_lower = message.lower()
     if any(word in msg_lower for word in ["will it rain", "rain", "rainy", "precipitation"]):
-        precip_prob = weather_data.get("precip_prob", 0)
-        
-        # If model says NO but precip_prob is high, correct it
-        if precip_prob >= 50 and any(word in reply_lower for word in ["no", "not", "won't", "will not", "unlikely"]):
+        precip_prob = weather_data.get("precip_prob", 0) or 0
+        precip_mm = weather_data.get("precip", 0) or 0
+        desc = weather_data.get("description", "precipitation")
+        if precip_prob >= 50:
             if precip_prob >= 80:
-                reply = f"Yes, there's a {precip_prob}% chance of rain with {weather_data.get('precip', 0)} mm expected ({weather_data.get('description', 'precipitation')})."
-            elif precip_prob >= 50:
-                reply = f"Yes, there's a {precip_prob}% chance of rain ({weather_data.get('precip', 0)} mm expected)."
-        # If model says YES but precip_prob is low, correct it
-        elif precip_prob < 20 and any(word in reply_lower for word in ["yes", "will", "likely"]):
-            reply = f"No, there's only a {precip_prob}% chance of rain, so it's unlikely."
+                reply = f"Yes. There's a {precip_prob}% chance of rain with about {precip_mm} mm expected ({desc})."
+            else:
+                reply = f"Yes. There's a {precip_prob}% chance of rain with about {precip_mm} mm expected."
+        elif precip_prob <= 10:
+            reply = f"No, only a {precip_prob}% chance of rain, so it's unlikely."
+        else:
+            reply = f"Probably not. Chance of rain is {precip_prob}%, precipitation around {precip_mm} mm."
     
     if show_raw_data:
         verify_url = f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}"
