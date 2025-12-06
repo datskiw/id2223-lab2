@@ -5,13 +5,23 @@ import requests
 import time
 import re
 
-# llama3 1B
-GGUF_REPO_ID = "datskiw/llama3-finetome-q8_0"
-GGUF_FILENAME = "llama3-finetome-q8_0.gguf"
+# ===== MODEL CONFIGURATION =====
+# Chat format: "llama3" or "chatml" (for Qwen)
+CHAT_FORMAT = "chatml"  # Change to "llama3" for Llama models
 
-# # llama3 3B
+# Model selection - uncomment the one you want to use:
+
+# Llama 3.2 1B
+# GGUF_REPO_ID = "datskiw/llama3-1B-finetome-q8_0"
+# GGUF_FILENAME = "llama3-1B-finetome-q8_0.gguf"
+
+# Llama 3.2 3B
 # GGUF_REPO_ID = "datskiw/llama3-3B-finetome-q8_0"
 # GGUF_FILENAME = "llama3-3B-finetome-q8_0.gguf"
+
+# Qwen 2 0.5B
+GGUF_REPO_ID = "datskiw/qwen2-0.5b-finetome-q8_0"
+GGUF_FILENAME = "qwen2-0.5b-finetome-q8_0.gguf"
 
 # Download and load model
 gguf_path = hf_hub_download(repo_id=GGUF_REPO_ID, filename=GGUF_FILENAME)
@@ -215,7 +225,10 @@ def is_general_weather_question(message):
     return is_general and not is_specific
 
 def build_prompt(history, message, weather_data, location):
-    """Build prompt with weather data."""
+    """Build prompt with weather data. Supports both Llama 3.2 and Qwen (ChatML) formats."""
+    # Use configured chat format
+    is_chatml = (CHAT_FORMAT.lower() == "chatml")
+    
     if "temp_max" in weather_data:
         w = weather_data
         weather_info = f"High {w['temp_max']}°C, Low {w['temp_min']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
@@ -247,17 +260,32 @@ def build_prompt(history, message, weather_data, location):
             "Answer the specific question asked. Use the exact numbers from the data provided."
         )
     
-    prompt = "<|begin_of_text|>"
-    prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+    if is_chatml:
+        # ChatML format for Qwen
+        prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        
+        if history:
+            for turn in history[-3:]:
+                if isinstance(turn, (list, tuple)) and len(turn) >= 2:
+                    prompt += f"<|im_start|>user\n{turn[0]}<|im_end|>\n"
+                    prompt += f"<|im_start|>assistant\n{turn[1]}<|im_end|>\n"
+        
+        prompt += f"<|im_start|>user\n{message}<|im_end|>\n"
+        prompt += "<|im_start|>assistant\n"
+    else:
+        # Llama 3.2 format
+        prompt = "<|begin_of_text|>"
+        prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+        
+        if history:
+            for turn in history[-3:]:
+                if isinstance(turn, (list, tuple)) and len(turn) >= 2:
+                    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{turn[0]}<|eot_id|>"
+                    prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{turn[1]}<|eot_id|>"
+        
+        prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{message}<|eot_id|>"
+        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
     
-    if history:
-        for turn in history[-3:]:
-            if isinstance(turn, (list, tuple)) and len(turn) >= 2:
-                prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{turn[0]}<|eot_id|>"
-                prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{turn[1]}<|eot_id|>"
-    
-    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{message}<|eot_id|>"
-    prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
     return prompt
 
 def chat_fn(message, history, location, show_raw_data):
@@ -273,7 +301,10 @@ def chat_fn(message, history, location, show_raw_data):
         return f"Sorry, couldn't fetch weather data: {weather_data['error']}"
     
     prompt = build_prompt(history, message, weather_data, loc_name)
-    output = llm(prompt, max_tokens=200, temperature=0.7, stop=["<|eot_id|>", "<|end_of_text|>"])
+    # Use appropriate stop tokens based on chat format
+    is_chatml = (CHAT_FORMAT.lower() == "chatml")
+    stop_tokens = ["<|im_end|>", "<|end_of_text|>"] if is_chatml else ["<|eot_id|>", "<|end_of_text|>"]
+    output = llm(prompt, max_tokens=200, temperature=0.7, stop=stop_tokens)
     reply = output["choices"][0]["text"].strip()
     
     # For general weather questions, always provide a concise deterministic summary
