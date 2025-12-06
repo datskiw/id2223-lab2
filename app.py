@@ -95,7 +95,7 @@ def get_weather(lat, lon, day=0):
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&forecast_days=7&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,precipitation_probability_max,wind_speed_10m_max"
     
     # Retry logic for rate limits
-    max_retries = 3
+    max_retries = 5  # allow a couple more retries
     for attempt in range(max_retries):
         try:
             r = requests.get(url, timeout=5)
@@ -103,11 +103,12 @@ def get_weather(lat, lon, day=0):
             # Handle rate limiting with exponential backoff
             if r.status_code == 429:
                 if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + 1  # 2s, 3s, 5s
+                    # exponential backoff with slight jitter
+                    wait_time = (2 ** attempt) + 1 + (0.2 * attempt)
                     time.sleep(wait_time)
                     continue
                 else:
-                    return {"error": "Rate limit exceeded. Please try again in a moment."}
+                    return {"error": "Rate limit exceeded. Please try again in a minute or two."}
             
             r.raise_for_status()  # Check for other HTTP errors
             data = r.json()
