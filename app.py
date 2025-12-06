@@ -238,8 +238,9 @@ def build_prompt(history, message, weather_data, location):
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
     system_prompt = (
+        
+        f"You are a professional weather reporter. Only use the weather data given here: Weather data: {weather_info}\n."
         """
-        You are a professional weather reporter. Only use the weather data given here: {weather_info}.
         Give short answers (1-3 sentences) summarizing the weather data that the use asks about.
         Dont make up any weather data and only use the given weather data.
         If you dont have the required weather data, then say that you are unsure.
