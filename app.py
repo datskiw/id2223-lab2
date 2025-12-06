@@ -304,8 +304,20 @@ def chat_fn(message, history, location, show_raw_data):
     # Use appropriate stop tokens based on chat format
     is_chatml = (CHAT_FORMAT.lower() == "chatml")
     stop_tokens = ["<|im_end|>", "<|end_of_text|>"] if is_chatml else ["<|eot_id|>", "<|end_of_text|>"]
-    output = llm(prompt, max_tokens=200, temperature=0.7, stop=stop_tokens)
-    reply = output["choices"][0]["text"].strip()
+    
+    # Stream tokens for real-time display (similar to TextStreamer)
+    reply = ""
+    stream = llm(prompt, max_tokens=200, temperature=0.7, stop=stop_tokens, stream=True)
+    
+    for output in stream:
+        if "choices" in output and len(output["choices"]) > 0:
+            token = output["choices"][0].get("text", "")
+            reply += token
+            yield reply  # Yield partial response for streaming
+    
+    # Final processing on complete reply
+    original_reply = reply.strip()
+    reply = original_reply
     
     # For general weather questions, always provide a concise deterministic summary
     is_general = is_general_weather_question(message)
@@ -437,9 +449,12 @@ def chat_fn(message, history, location, show_raw_data):
                 f"[API URL: {weather_data.get('api_url', 'N/A')}]\n"
                 f"[Verify on Open-Meteo: {verify_url}]"
             )
-        return reply + raw_data
+        # Yield final result with raw data
+        yield reply + raw_data
+        return
     
-    return reply
+    # Yield final processed result (in case post-processing changed it)
+    yield reply
 
 demo = gr.ChatInterface(
     fn=chat_fn,
