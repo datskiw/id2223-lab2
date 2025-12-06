@@ -238,17 +238,17 @@ def build_prompt(history, message, weather_data, location):
         weather_info = f"Temperature {w['temp']}°C, wind {w['wind']} m/s, {w['description']}, precipitation chance {w['precip_prob']}%, precipitation {w['precip']} mm"
     
     system_prompt = (
-        f"You are a helpful weather assistant for {location}. "
-        f"You are given fresh weather data and must ground every response in it.\n\n"
-        f"Weather data: {weather_info}\n\n"
-        "Rules:\n"
-        "- Use the provided numbers and description verbatim; do not invent values.\n"
-        "- Keep answers concise (1-3 sentences) and conversational.\n"
-        "- Mention precipitation only when precipitation chance > 0% or precipitation > 0 mm.\n"
-        "- When asked about rain/precipitation, answer directly using precipitation_probability and precipitation.\n"
-        "- For general weather questions, summarize temperature, condition, wind, and mention rain only if relevant.\n"
-        "- For specific questions, address the question while citing the relevant values from the data."
+        """
+        You are a professional weather reporter. Only use the weather data given here: {weather_info}.
+        Give short answers (1-3 sentences) summarizing the weather data that the use asks about.
+        Dont make up any weather data and only use the given weather data.
+        If you dont have the required weather data, then say that you are unsure.
+        """
+
     )
+
+
+    
     
     if is_chatml:
         # ChatML format for Qwen
