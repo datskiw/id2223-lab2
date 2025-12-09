@@ -115,7 +115,7 @@ Our current model is fine-tuned on a generic instruction dataset (FineTome) and 
 
 ### Current Limitations
 
-- Model sometimes hallucinates (mitigated with post-processing)
+- Model sometimes hallucinates
 - Rate limiting from Open-Meteo API (handled with retries)
 - Limited to 7-day forecasts
 
