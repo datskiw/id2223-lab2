@@ -86,18 +86,6 @@ Building on the model comparison and hyperparameter search above, our main model
 - **Targeted hyperparameter tuning:** A small grid search over learning rate and weight decay (see table above) was used to choose the final training setup, which we then scaled to 100k examples and 1,000 steps.
 - **Quantization for deployment:** We quantized the Qwen 2 0.5B + LoRA model to **q8_0**, which kept latency low on CPU while preserving the quality measured in our comparison.
 
-Potential future model-centric work includes varying the LoRA rank and target layers, experimenting with other compact base models, and tuning decoding parameters specifically for factual weather answers.
-
-
-
-### Model-Centric Approaches
-
-Building on the model comparison and hyperparameter search above, our main model-centric work was:
-
-- **Choosing the backbone:** We empirically compared Llama 3.2 (1B, 3B) and Qwen 2 0.5B as instruction-tuned chat models and selected **Qwen 2 0.5B** as the best speed–quality trade-off for CPU deployment.
-- **Tuning training dynamics:** We ran a small grid search over learning rate and weight decay (see table above) and then trained the final LoRA model for 1,000 steps with the best-performing configuration.
-- **Making it deployable:** The chosen model is **quantized to q8_0**, which keeps latency acceptable on the Hugging Face CPU Space while preserving response quality.
-
 If we had more time, additional model-centric directions we would try:
 
 - Varying **LoRA rank** and which layers are adapted, to see how much capacity is actually needed for this dialogue task.
