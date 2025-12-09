@@ -28,7 +28,6 @@ The weather assistant combines:
 - Multi-city support via geocoding
 - Current weather and 7-day forecasts
 - Verification features (raw data display, API URLs)
-- Post-processing to ensure factual accuracy
 
 **Key Features:**
 - Natural language queries: "What's the weather in Paris?", "Will it rain tomorrow?"
