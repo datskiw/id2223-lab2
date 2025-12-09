@@ -48,9 +48,7 @@ We compared three fine-tuned models to select the best base architecture for fur
 1. **Inference Speed**: Average time to generate responses (3 runs per model)
 2. **Response Quality**: Percentage of responses that correctly mention weather data (temperature, conditions, precipitation)
 
-**Results**: Qwen 2 0.5B achieved the fastest inference speed (0.54s) while maintaining 100% quality, making it our choice for CPU deployment on Hugging Face Spaces.
-
-**Decision**: We selected **Qwen 2 0.5B** for hyperparameter grid search due to its speed-to-quality ratio.
+**Results**: Qwen 2 0.5B achieved the fastest inference speed (0.54s) while maintaining 100% quality, making it our choice for hyperparameter grid search and CPU deployment on Hugging Face Spaces.
 
 ### Hyperparameter Grid Search (Qwen 2 0.5B)
 
