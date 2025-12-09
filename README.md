@@ -111,7 +111,6 @@ Our current model is fine-tuned on a generic instruction dataset (FineTome) and 
 3. **Data quality and anti-hallucination signals**
 
    - Filter out examples where the target answer is inconsistent with the underlying API data (e.g. wrong temperature or conditions).
-   - Add **negative / correction examples**, where a hallucinated answer is followed by a corrected version, training the model to be conservative when it is unsure.
 
 ### Current Limitations
 
