@@ -32,7 +32,6 @@ The weather assistant combines:
 **Key Features:**
 - Natural language queries: "What's the weather in Paris?", "Will it rain tomorrow?"
 - Automatic location detection from messages
-- Weather condition emojis
 - Error handling and retry logic
 
 ## Task 2: Model and Data-Centric Improvements
@@ -49,7 +48,7 @@ We compared three fine-tuned models to select the best base architecture for fur
 1. **Inference Speed**: Average time to generate responses (3 runs per model)
 2. **Response Quality**: Percentage of responses that correctly mention weather data (temperature, conditions, precipitation)
 
-**Results**: Qwen 2 0.5B achieved the fastest inference speed (1.21s) while maintaining 100% quality, making it our choice for CPU deployment on Hugging Face Spaces.
+**Results**: Qwen 2 0.5B achieved the fastest inference speed (0.54s) while maintaining 100% quality, making it our choice for CPU deployment on Hugging Face Spaces.
 
 **Decision**: We selected **Qwen 2 0.5B** for hyperparameter grid search due to its speed-to-quality ratio.
 
