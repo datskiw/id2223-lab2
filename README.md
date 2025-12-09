@@ -112,8 +112,6 @@ Our current model is fine-tuned on a generic instruction dataset (FineTome) and 
 
    - Filter out examples where the target answer is inconsistent with the underlying API data (e.g. wrong temperature or conditions).
    - Add **negative / correction examples**, where a hallucinated answer is followed by a corrected version, training the model to be conservative when it is unsure.
-   - Keep a small held-out set of manually written weather questions and regularly check that fine-tuning does not degrade factual accuracy compared to directly querying the API.
-
 
 ### Current Limitations
 
